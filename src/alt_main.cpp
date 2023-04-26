@@ -3,9 +3,9 @@
 #include "gpio.h"
 #include "spi.h"
 #include "usart.h"
-#include "NRF24L01.h"
+#include "NRF24L01p.h"
 
-NRF24L01 nRF24L01(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin, &huart1);
+NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin, &huart1);
 
 const uint64_t address = 0xF0F0F0F0E1LL;
 uint8_t button_state = 0;
@@ -20,9 +20,9 @@ int alt_main() {
     }
     HAL_UART_Transmit(&huart1, buff, strlen(message), 2000);
 
-    nRF24L01.init();
-    nRF24L01.openWritingPipe(0xF0F0F0F0E1LL, 76);
-    nRF24L01.printAllRegisters();
+    nRF24L01p.init();
+    nRF24L01p.openWritingPipe(0xF0F0F0F0E1LL, 76);
+    nRF24L01p.printAllRegisters();
 /*
     radio.begin();                  //Starting the Wireless communication
     radio.openWritingPipe(address); //Setting the address where we will send the data
@@ -35,7 +35,7 @@ int alt_main() {
         for (uint16_t i = 0; i < strlen(message); i++) {
             buff[i] = message[i];
         }
-        bool result = nRF24L01.write(buff); 
+        bool result = nRF24L01p.write(buff); 
 
         buff[0] = result ? '1' : '0';
         buff[1] = '\r';
