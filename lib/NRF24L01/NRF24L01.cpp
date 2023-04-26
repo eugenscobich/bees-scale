@@ -7,93 +7,91 @@
 #define min(a, b) (a < b ? a : b)
 
 
-NRF24L01::NRF24L01(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin) :
+NRF24L01::NRF24L01(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin, UART_HandleTypeDef* _huart) :
     hspi(_hspi), 
     nrf_ce_GPIOx(_nrf_ce_GPIOx),
     nrf_ce_GPIO_Pin(_nrf_ce_GPIO_Pin),
     nrf_csn_GPIOx(_nrf_csn_GPIOx),
     nrf_csn_GPIO_Pin(_nrf_csn_GPIO_Pin), 
-    addressWidth(5),
-    ackPayloadsEnabled(false),
-    payloadSize(32) {
+    log_huart(_huart) {
 
 }
 
-void NRF24L01::ceEnable() {
+void NRF24L01::_ceEnable() {
     HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_SET);
 }
 
-void NRF24L01::ceDisable() {
+void NRF24L01::_ceDisable() {
     HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_RESET);
 }
 
-void NRF24L01::csHigh() {
+void NRF24L01::_csHigh() {
     HAL_GPIO_WritePin(nrf_csn_GPIOx, nrf_csn_GPIO_Pin, GPIO_PIN_SET);
 }
 
-void NRF24L01::csLow() {
+void NRF24L01::_csLow() {
     HAL_GPIO_WritePin(nrf_csn_GPIOx, nrf_csn_GPIO_Pin, GPIO_PIN_RESET);
 }
 
 // Write single data
-void NRF24L01::writeRegister(uint8_t reg, uint8_t data) {
+void NRF24L01::_writeRegister(uint8_t reg, uint8_t data) {
     uint8_t buf[2];
     buf[0] = W_REGISTER | reg;
     buf[1] = data;
 
 
-    csLow();
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 2, 1000);
     handleSpiStatus(halStatus, 1);
-    csHigh();
+    _csHigh();
 
 }
 
 // Write multiple data
-void NRF24L01::writeRegister(uint8_t reg, uint8_t *data, uint32_t size) {
+void NRF24L01::_writeRegister(uint8_t reg, uint8_t *data, uint32_t size) {
     uint8_t buf[1];
     buf[0] = W_REGISTER | reg;
 
-    csLow();
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
     handleSpiStatus(halStatus, 2);
     halStatus = HAL_SPI_Transmit(hspi, data, size, 1000);
     handleSpiStatus(halStatus, 3);
-    csHigh();
+    _csHigh();
 }
 
 // Read single data
-uint8_t NRF24L01::readRegister(uint8_t reg) {
+uint8_t NRF24L01::_readRegister(uint8_t reg) {
     uint8_t data = 0;
     uint8_t buf[1];
     buf[0] = R_REGISTER | reg;
-    csLow();
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
     handleSpiStatus(halStatus, 4);
     halStatus = HAL_SPI_Receive(hspi, &data, 1, 1000);
     handleSpiStatus(halStatus, 5);
-    csHigh();
+    _csHigh();
     return data;
 }
 
 // Read multiple data
-void NRF24L01::readRegister(uint8_t reg, uint8_t *data, uint32_t size) {
+void NRF24L01::_readRegister(uint8_t reg, uint8_t *data, uint32_t size) {
     uint8_t buf[1];
     buf[0] = R_REGISTER | reg;
-    csLow();
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
     handleSpiStatus(halStatus, 6);
     halStatus = HAL_SPI_Receive(hspi, data, size, 1000);
     handleSpiStatus(halStatus, 7);
-    csHigh();
+    _csHigh();
 }
 
 
-void NRF24L01::sendCommand(uint8_t command) {
-    csLow();
+void NRF24L01::_sendCommand(uint8_t command) {
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, &command, 1, 1000);
     handleSpiStatus(halStatus, 8);
-    csHigh();
+    _csHigh();
 }
 
 void NRF24L01::init() {
@@ -102,27 +100,27 @@ void NRF24L01::init() {
     reset();  
     setRetries(5, 15);
     setDataRate(NRF24L01_1MBPS);
-    setPayloadSize(payloadSize);
-    writeRegister(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT));
-    sendCommand(FLUSH_RX);
-    sendCommand(FLUSH_TX);
-    writeRegister(CONFIG, (_BV(EN_CRC) | _BV(CRCO)));
+    setPayloadSize(32);
+    _writeRegister(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT));
+    _sendCommand(FLUSH_RX);
+    _sendCommand(FLUSH_TX);
+    _writeRegister(CONFIG, (_BV(EN_CRC) | _BV(CRCO)));
     powerUp();
     //ceEnable();
 }
 
 void NRF24L01::setRetries(uint8_t delay, uint8_t count) {
-    writeRegister(SETUP_RETR, static_cast<uint8_t>(min(15, delay) << ARD | min(15, count)));
+    _writeRegister(SETUP_RETR, static_cast<uint8_t>(min(15, delay) << ARD | min(15, count)));
 }
 
 bool NRF24L01::setDataRate(NRF24L01DataRateEnum NRF24L01DataRate) {
-    uint8_t rfSetup = readRegister(RF_SETUP);
+    uint8_t rfSetup = _readRegister(RF_SETUP);
 
     rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_DR_HIGH)));
-    writeRegister(RF_SETUP, rfSetup);
+    _writeRegister(RF_SETUP, rfSetup);
 
     // Verify our result
-    if (readRegister(RF_SETUP) == rfSetup) {
+    if (_readRegister(RF_SETUP) == rfSetup) {
         return true;
     }
     return false;
@@ -131,101 +129,101 @@ bool NRF24L01::setDataRate(NRF24L01DataRateEnum NRF24L01DataRate) {
 
 void NRF24L01::reset() {
     // Reset pins
-    ceDisable();
+    _ceDisable();
 
     // Reset registers
-    writeRegister(CONFIG, 0x08);
-    writeRegister(EN_AA, 0x3F);
-    writeRegister(EN_RXADDR, 0x03);
-    writeRegister(SETUP_AW, 0x03);
-    writeRegister(SETUP_RETR, 0x03);
-    writeRegister(RF_CH, 0x02);
-    writeRegister(RF_SETUP, 0x07);
-    writeRegister(STATUS, 0x7E);
-    writeRegister(TX_ADDR, 0x00);
-    writeRegister(RX_PW_P0, 0x00);
-    writeRegister(RX_PW_P1, 0x00);
-    writeRegister(RX_PW_P2, 0x00);
-    writeRegister(RX_PW_P3, 0x00);
-    writeRegister(RX_PW_P4, 0x00);
-    writeRegister(RX_PW_P5, 0x00);
-    writeRegister(FIFO_STATUS, 0x11);
-    writeRegister(DYNPD, 0x00);
-    writeRegister(FEATURE, 0x00);
+    _writeRegister(CONFIG, 0x08);
+    _writeRegister(EN_AA, 0x3F);
+    _writeRegister(EN_RXADDR, 0x03);
+    _writeRegister(SETUP_AW, 0x03);
+    _writeRegister(SETUP_RETR, 0x03);
+    _writeRegister(RF_CH, 0x02);
+    _writeRegister(RF_SETUP, 0x07);
+    _writeRegister(STATUS, 0x7E);
+    _writeRegister(TX_ADDR, 0x00);
+    _writeRegister(RX_PW_P0, 0x00);
+    _writeRegister(RX_PW_P1, 0x00);
+    _writeRegister(RX_PW_P2, 0x00);
+    _writeRegister(RX_PW_P3, 0x00);
+    _writeRegister(RX_PW_P4, 0x00);
+    _writeRegister(RX_PW_P5, 0x00);
+    _writeRegister(FIFO_STATUS, 0x11);
+    _writeRegister(DYNPD, 0x00);
+    _writeRegister(FEATURE, 0x00);
 
     uint8_t rx_addr_p0_def[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
-	writeRegister(RX_ADDR_P0, rx_addr_p0_def, 5);
+	_writeRegister(RX_ADDR_P0, rx_addr_p0_def, 5);
 
     uint8_t rx_addr_p1_def[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
-	writeRegister(RX_ADDR_P1, rx_addr_p1_def, 5);
-	writeRegister(RX_ADDR_P2, 0xC3);
-	writeRegister(RX_ADDR_P3, 0xC4);
-	writeRegister(RX_ADDR_P4, 0xC5);
-	writeRegister(RX_ADDR_P5, 0xC6);
+	_writeRegister(RX_ADDR_P1, rx_addr_p1_def, 5);
+	_writeRegister(RX_ADDR_P2, 0xC3);
+	_writeRegister(RX_ADDR_P3, 0xC4);
+	_writeRegister(RX_ADDR_P4, 0xC5);
+	_writeRegister(RX_ADDR_P5, 0xC6);
 
     uint8_t tx_addr_def[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
-	writeRegister(TX_ADDR, tx_addr_def, 5);
+	_writeRegister(TX_ADDR, tx_addr_def, 5);
 
 
-    ceEnable();
+    _ceEnable();
 }
 
 
 void NRF24L01::powerUp() {
-    uint8_t new_config = readRegister(CONFIG);
+    uint8_t new_config = _readRegister(CONFIG);
     new_config |= 1 << 1;
 
-    writeRegister(CONFIG, new_config);
+    _writeRegister(CONFIG, new_config);
 }
 
 void NRF24L01::powerDown() {
-    uint8_t new_config = readRegister(CONFIG);
+    uint8_t new_config = _readRegister(CONFIG);
     new_config &= 0xFD;
 
-    writeRegister(CONFIG, new_config);
+    _writeRegister(CONFIG, new_config);
 }
 
 void NRF24L01::openWritingPipe(uint64_t address, uint8_t cannel) {
-    ceDisable();
-    writeRegister(RF_CH, cannel);
-    writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t*>(&address), addressWidth);
-    writeRegister(TX_ADDR, reinterpret_cast<uint8_t*>(&address), addressWidth);
+    _ceDisable();
+    _writeRegister(RF_CH, cannel);
+    _writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t*>(&address), 5);
+    _writeRegister(TX_ADDR, reinterpret_cast<uint8_t*>(&address), 5);
 
     powerUp();
     setTxMode();
-    ceEnable();
+    _ceEnable();
 }
 
 
 void NRF24L01::setTxMode() {
-    uint8_t new_config = readRegister(CONFIG);
+    uint8_t new_config = _readRegister(CONFIG);
     new_config &= 0xFE;
-    writeRegister(CONFIG, new_config);
+    _writeRegister(CONFIG, new_config);
 }
 
 bool NRF24L01::write(uint8_t *data) {
 
     uint8_t cmd = W_TX_PAYLOAD;
 
-    csLow();
+    _csLow();
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, &cmd, 1, 1000);
     handleSpiStatus(halStatus, 8);
     halStatus = HAL_SPI_Transmit(hspi, data, 32, 1000);
     handleSpiStatus(halStatus, 9);
-    csHigh();
+    _csHigh();
 
     HAL_Delay(1);
 
 
-    uint8_t fifostatus = readRegister(FIFO_STATUS);
+    uint8_t fifostatus = _readRegister(FIFO_STATUS);
 
 	// check the fourth bit of FIFO_STATUS to know if the TX fifo is empty
 	if ((fifostatus&(1<<4)) && (!(fifostatus&(1<<3))))
 	{
 		cmd = FLUSH_TX;
-		sendCommand(cmd);
+		_sendCommand(cmd);
 		// reset FIFO_STATUS
-		writeRegister(FIFO_STATUS, 0x11);
+		_writeRegister(FIFO_STATUS, 0x11);
 		return true;
 	}
     return false;
@@ -233,15 +231,15 @@ bool NRF24L01::write(uint8_t *data) {
 
 void NRF24L01::openReadingPipe(uint64_t address, uint8_t channel) {
 	// disable the chip before configuring the device
-	ceDisable();
+	_ceDisable();
 
-	writeRegister(STATUS, 0x00);
-	writeRegister(RF_CH, channel);  // select the channel
+	_writeRegister(STATUS, 0x00);
+	_writeRegister(RF_CH, channel);  // select the channel
 
 	// select data pipe 2
-	uint8_t en_rxaddr = readRegister(EN_RXADDR);
+	uint8_t en_rxaddr = _readRegister(EN_RXADDR);
 	en_rxaddr = en_rxaddr | (1<<2);
-	writeRegister (EN_RXADDR, en_rxaddr);
+	_writeRegister (EN_RXADDR, en_rxaddr);
 
 	/* We must write the address for Data Pipe 1, if we want to use any pipe from 2 to 5
 	 * The Address from DATA Pipe 2 to Data Pipe 5 differs only in the LSB
@@ -253,25 +251,25 @@ void NRF24L01::openReadingPipe(uint64_t address, uint8_t channel) {
 	 * Pipe 3 ADDR = 0xAABBCCDD33
 	 *
 	 */
-	writeRegister(RX_ADDR_P1, reinterpret_cast<uint8_t*>(&address), addressWidth);  // Write the Pipe1 address
-	writeRegister(RX_ADDR_P2, 0xEE);  // Write the Pipe2 LSB address
-	writeRegister(RX_PW_P2, 0x20);   // 32 bit payload size for pipe 2
+	_writeRegister(RX_ADDR_P1, reinterpret_cast<uint8_t*>(&address), 5);  // Write the Pipe1 address
+	_writeRegister(RX_ADDR_P2, 0xEE);  // Write the Pipe2 LSB address
+	_writeRegister(RX_PW_P2, 0x20);   // 32 bit payload size for pipe 2
 
 
 	// power up the device in Rx mode
-	uint8_t config = readRegister(CONFIG);
+	uint8_t config = _readRegister(CONFIG);
 	config = config | (1<<1) | (1<<0);
-	writeRegister(CONFIG, config);
+	_writeRegister(CONFIG, config);
 
 	// Enable the chip after configuring the device
-	ceEnable();
+	_ceEnable();
 }
 
 
 uint8_t NRF24L01::isDataAvailable (int pipenum) {
-	uint8_t status = readRegister(STATUS);
+	uint8_t status = _readRegister(STATUS);
 	if ((status&(1<<6))&&(status&(pipenum<<1))) {
-		writeRegister(STATUS, (1<<6));
+		_writeRegister(STATUS, (1<<6));
 		return 1;
 	}
 	return 0;
@@ -283,7 +281,7 @@ void NRF24L01::receive(uint8_t *data) {
 
 	// select the device
 
-    csLow();
+    _csLow();
 	// payload command
 	cmdtosend = R_RX_PAYLOAD;
 	HAL_SPI_Transmit(hspi, &cmdtosend, 1, 1000);
@@ -293,12 +291,12 @@ void NRF24L01::receive(uint8_t *data) {
 
 	// Unselect the device
 
-    csHigh();
+    _csHigh();
 
 	HAL_Delay(1);
 
 	cmdtosend = FLUSH_RX;
-	sendCommand(cmdtosend);
+	_sendCommand(cmdtosend);
 }
 
 
@@ -308,23 +306,23 @@ void NRF24L01::readAll (uint8_t *data)
 {
 	for (int i=0; i<10; i++)
 	{
-		*(data+i) = readRegister(i);
+		*(data+i) = _readRegister(i);
 	}
 
-	readRegister(RX_ADDR_P0, (data+10), 5);
+	_readRegister(RX_ADDR_P0, (data+10), 5);
 
-	readRegister(RX_ADDR_P1, (data+15), 5);
+	_readRegister(RX_ADDR_P1, (data+15), 5);
 
-	*(data+20) = readRegister(RX_ADDR_P2);
-	*(data+21) = readRegister(RX_ADDR_P3);
-	*(data+22) = readRegister(RX_ADDR_P4);
-	*(data+23) = readRegister(RX_ADDR_P5);
+	*(data+20) = _readRegister(RX_ADDR_P2);
+	*(data+21) = _readRegister(RX_ADDR_P3);
+	*(data+22) = _readRegister(RX_ADDR_P4);
+	*(data+23) = _readRegister(RX_ADDR_P5);
 
-	readRegister(RX_ADDR_P0, (data+24), 5);
+	_readRegister(RX_ADDR_P0, (data+24), 5);
 
 	for (int i=29; i<38; i++)
 	{
-		*(data+i) = readRegister(i-12);
+		*(data+i) = _readRegister(i-12);
 	}
 
 }
@@ -336,7 +334,7 @@ void NRF24L01::setPayloadSize(uint8_t size) {
 
     // write static payload size setting for all pipes
     for (uint8_t i = 0; i < 6; ++i) {
-        writeRegister(static_cast<uint8_t>(RX_PW_P0 + i), payload_size);
+        _writeRegister(static_cast<uint8_t>(RX_PW_P0 + i), payload_size);
     }
 }
 
@@ -392,7 +390,7 @@ void NRF24L01::printAllRegisters() {
 
 void NRF24L01::printRegister(uint8_t reg) {
 
-        uint8_t data = readRegister(reg);
+        uint8_t data = _readRegister(reg);
 
         uint8_t buf[100];
         buf[0] = 'R';
@@ -422,6 +420,6 @@ void NRF24L01::printRegister(uint8_t reg) {
         buf[24] = '\r';
         buf[25] = '\n';
 
-        HAL_UART_Transmit(&huart1, buf, 26, 2000);
+        HAL_UART_Transmit(log_huart, buf, 26, 2000);
 
 }

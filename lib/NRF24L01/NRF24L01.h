@@ -1,8 +1,7 @@
 #ifndef __NRF24L01_H__
 #define __NRF24L01_H__
 
-#include "spi.h"
-#include "usart.h"
+#include "stm32f1xx_hal.h"
 #include "string.h"
 
 /* Memory Map */
@@ -128,29 +127,32 @@ private:
 
     GPIO_TypeDef* nrf_csn_GPIOx;
     uint16_t nrf_csn_GPIO_Pin; /* SPI Chip select */
-    uint8_t addressWidth;
-    bool ackPayloadsEnabled;
-    uint8_t payloadSize;
+
+    UART_HandleTypeDef* log_huart;
+
+    void _ceEnable();
+    void _ceDisable();
+    void _csHigh();
+    void _csLow();
+
+    void _writeRegister(uint8_t reg, uint8_t data);
+    void _writeRegister(uint8_t reg, uint8_t *data, uint32_t size);
+    uint8_t _readRegister(uint8_t reg);
+    void _readRegister(uint8_t reg, uint8_t *data, uint32_t size);
+    void _sendCommand(uint8_t command);
 
 public:
     void reset();
     void powerUp();
     void powerDown();
     void setTxMode();
-    void ceEnable();
-    void ceDisable();
-    void csHigh();
-    void csLow();
+
     void handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count);
 
 
-    NRF24L01(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin);
+    NRF24L01(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin, UART_HandleTypeDef* _huart);
 
-    void writeRegister(uint8_t reg, uint8_t data);
-    void writeRegister(uint8_t reg, uint8_t *data, uint32_t size);
-    uint8_t readRegister(uint8_t reg);
-    void readRegister(uint8_t reg, uint8_t *data, uint32_t size);
-    void sendCommand(uint8_t command);
+
     void openWritingPipe(uint64_t address, uint8_t cannel);
     bool write(uint8_t *data);
     void readAll(uint8_t *data);

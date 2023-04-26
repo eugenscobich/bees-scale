@@ -5,7 +5,7 @@
 #include "usart.h"
 #include "NRF24L01.h"
 
-NRF24L01 nRF24L01(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
+NRF24L01 nRF24L01(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin, &huart1);
 
 const uint64_t address = 0xF0F0F0F0E1LL;
 uint8_t button_state = 0;
