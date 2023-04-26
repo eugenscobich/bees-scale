@@ -101,22 +101,22 @@ void NRF24L01p::init() {
     setRetries(5, 15);
     setDataRate(NRF24L01p_1MBPS);
     setPayloadSize(32);
-    _writeRegister(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT));
+    _writeRegister(STATUS, _BV(STATUS_RX_DR_6) | _BV(STATUS_TX_DS_5) | _BV(STATUS_MAX_RT_4));
     _sendCommand(FLUSH_RX);
     _sendCommand(FLUSH_TX);
-    _writeRegister(CONFIG, (_BV(EN_CRC) | _BV(CRCO)));
+    _writeRegister(CONFIG, (_BV(CONFIG_EN_CRC_3) | _BV(CONFIG_CRCO_2)));
     powerUp();
     //ceEnable();
 }
 
 void NRF24L01p::setRetries(uint8_t delay, uint8_t count) {
-    _writeRegister(SETUP_RETR, static_cast<uint8_t>(min(15, delay) << ARD | min(15, count)));
+    _writeRegister(SETUP_RETR, static_cast<uint8_t>(min(15, delay) << 4 | min(15, count)));
 }
 
 bool NRF24L01p::setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate) {
     uint8_t rfSetup = _readRegister(RF_SETUP);
 
-    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_DR_HIGH)));
+    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_HIGH_3)));
     _writeRegister(RF_SETUP, rfSetup);
 
     // Verify our result

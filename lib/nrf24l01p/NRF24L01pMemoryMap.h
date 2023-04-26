@@ -69,12 +69,14 @@
 #define RF_CH_RF_CH_2           2
 #define RF_CH_RF_CH_1           1
 #define RF_CH_RF_CH_0           0
+#define RF_SETUP_CONT_WAVE_7    7
+#define RF_SETUP_RF_DR_LOW_5    5
 #define RF_SETUP_PLL_LOCK_4     4
-#define RF_SETUP_RF_DR_3        3
+#define RF_SETUP_RF_DR_HIGH_3   3
 #define RF_SETUP_RF_PWR_2       2
 #define RF_SETUP_RF_PWR_1       1
 #define RF_SETUP_LNA_HCURR_0    0
-#define STATUS_RF_DR_6          6
+#define STATUS_RX_DR_6          6
 #define STATUS_TX_DS_5          5
 #define STATUS_MAX_RT_4         4
 #define STATUS_RX_P_NO_3        3
@@ -142,7 +144,7 @@
 #define FEATURE_EN_DYN_ACK      0
 
 /* Instruction Mnemonics */
-#define R_REGISTER          0x00
+#define R_REGISTER          0x00 //
 #define W_REGISTER          0x20
 #define R_RX_PAYLOAD        0x61
 #define W_TX_PAYLOAD        0xA0
