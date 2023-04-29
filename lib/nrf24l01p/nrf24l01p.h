@@ -4,7 +4,11 @@
 #include "stm32f1xx_hal.h"
 #include "string.h"
 #include "NRF24L01pMemoryMap.h"
+#include <stdio.h>
 
+
+#define _BV(b) (1UL << (b))
+#define _CHECK_BIT(data, bit) ((data & (1UL << (bit))) > 0)
 
 typedef enum {
     NRF24L01p_1MBPS = 0,
@@ -24,29 +28,62 @@ private:
     GPIO_TypeDef* nrf_csn_GPIOx;
     uint16_t nrf_csn_GPIO_Pin; /* SPI Chip select */
 
-    UART_HandleTypeDef* log_huart;
+    void enableCE();
+    void disableCE();
+    void setCsnHigh();
+    void setCsnLow();
 
-    void _ceEnable();
-    void _ceDisable();
-    void _csHigh();
-    void _csLow();
+    void writeRegister(uint8_t reg, uint8_t data);
+    void writeRegister(uint8_t reg, uint8_t *data, uint32_t size);
+    uint8_t readRegister(uint8_t reg);
+    void readRegister(uint8_t reg, uint8_t *data, uint32_t size);
+    void sendCommand(uint8_t command);
+    void printConfigRegister();
+    void printEnableAutoAcknolageRegister();
+    void printEnableRXAddressesRegister();
+    void printSetupAdressWidthRegister();
+    void printSetuRetransmissionRegister();
+    void printRfChannelRegister();
+    void printRfSetupRegister();
+    void printStatusRegister();
+    void printObserveTxRegister();
+    void printRpdRegister();
+    void printReceiveAddressDataPipesRegister();
+    void printReceiveAddressDataPipe0Register();
+    void printReceiveAddressDataPipe1Register();
+    void printReceiveAddressDataPipe2Register();
+    void printReceiveAddressDataPipe3Register();
+    void printReceiveAddressDataPipe4Register();
+    void printReceiveAddressDataPipe5Register();
+    void printTransmitAddressRegister();
+    void printReceiveNumberOfBytesInDataPipesRegister();
+    void printReceiveNumberOfBytesInDataPipe0Register();
+    void printReceiveNumberOfBytesInDataPipe1Register();
+    void printReceiveNumberOfBytesInDataPipe2Register();
+    void printReceiveNumberOfBytesInDataPipe3Register();
+    void printReceiveNumberOfBytesInDataPipe4Register();
+    void printReceiveNumberOfBytesInDataPipe5Register();
+    void printFifoStatusRegister();
+    void printEnableDynamicPayloadLenghtRegister();
+    void printFeatureRegister();
 
-    void _writeRegister(uint8_t reg, uint8_t data);
-    void _writeRegister(uint8_t reg, uint8_t *data, uint32_t size);
-    uint8_t _readRegister(uint8_t reg);
-    void _readRegister(uint8_t reg, uint8_t *data, uint32_t size);
-    void _sendCommand(uint8_t command);
 
 public:
     void reset();
     void powerUp();
     void powerDown();
+    bool isPowerUp();
+    bool isPowerDown();
+    bool isInTxMode();
+    bool isInRxMode();
+
+
     void setTxMode();
 
     void handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count);
 
 
-    NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin, UART_HandleTypeDef* _huart);
+    NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin);
 
 
     void openWritingPipe(uint64_t address, uint8_t cannel);

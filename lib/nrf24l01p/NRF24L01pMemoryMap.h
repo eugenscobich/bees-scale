@@ -128,20 +128,20 @@
 #define RX_PW_P5_RX_PW_P5_2     2
 #define RX_PW_P5_RX_PW_P5_1     1
 #define RX_PW_P5_RX_PW_P5_0     0
-#define FIFO_STATUS_TX_REUSE    6
-#define FIFO_STATUS_FIFO_FULL   5
-#define FIFO_STATUS_TX_EMPTY    4
-#define FIFO_STATUS_RX_FULL     1
-#define FIFO_STATUS_RX_EMPTY    0
-#define DYNPD_DPL_P5            5
-#define DYNPD_DPL_P4            4
-#define DYNPD_DPL_P3            3
-#define DYNPD_DPL_P2            2
-#define DYNPD_DPL_P1            1
-#define DYNPD_DPL_P0            0
-#define FEATURE_EN_DPL          2
-#define FEATURE_EN_ACK_PAY      1
-#define FEATURE_EN_DYN_ACK      0
+#define FIFO_STATUS_TX_REUSE_6  6
+#define FIFO_STATUS_FIFO_FULL_5 5
+#define FIFO_STATUS_TX_EMPTY_4  4
+#define FIFO_STATUS_RX_FULL_1   1
+#define FIFO_STATUS_RX_EMPTY_0  0
+#define DYNPD_DPL_P5_5          5
+#define DYNPD_DPL_P4_4          4
+#define DYNPD_DPL_P3_3          3
+#define DYNPD_DPL_P2_2          2
+#define DYNPD_DPL_P1_1          1
+#define DYNPD_DPL_P0_0          0
+#define FEATURE_EN_DPL_2        2
+#define FEATURE_EN_ACK_PAY_1    1
+#define FEATURE_EN_DYN_ACK_0    0
 
 /* Instruction Mnemonics */
 #define R_REGISTER          0x00 //

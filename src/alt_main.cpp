@@ -3,24 +3,37 @@
 #include "gpio.h"
 #include "spi.h"
 #include "usart.h"
+#include "rtc.h"
 #include "NRF24L01p.h"
+#include <stdio.h>
 
-NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin, &huart1);
+#define DEVICE_IS_MASTER false
 
-const uint64_t address = 0xF0F0F0F0E1LL;
+NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
+
+const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 uint8_t button_state = 0;
 
 uint8_t buff[100];
 
-int alt_main() {
-    char message[] = "Hello World\r\n";
-    for (uint16_t i = 0; i < strlen(message); i++)
-    {
-        buff[i] = message[i];
-    }
-    HAL_UART_Transmit(&huart1, buff, strlen(message), 2000);
+void printDeviceInfo();
 
-    nRF24L01p.init();
+int alt_main() {
+    HAL_Delay(100);
+    printDeviceInfo();
+    
+    nRF24L01p.printAllRegisters();
+    
+    if (!DEVICE_IS_MASTER) {
+        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode()) {
+
+        }
+    }
+
+
+
+
+
     nRF24L01p.openWritingPipe(0xF0F0F0F0E1LL, 76);
     nRF24L01p.printAllRegisters();
 /*
@@ -29,8 +42,8 @@ int alt_main() {
     radio.setPALevel(RF24_PA_MIN);  //You can set it as minimum or maximum depending on the distance between the transmitter and receiver.
     radio.stopListening();          //This sets the module as transmitter
 */
+    char message[] = "Hello World1\r\n";
 	while (1) { 
-
         const char text[] = "Your Button State is HIGH";
         for (uint16_t i = 0; i < strlen(message); i++) {
             buff[i] = message[i];
@@ -42,11 +55,11 @@ int alt_main() {
         buff[2] = '\n';
         HAL_UART_Transmit(&huart1, buff, 3, 2000);
 
-        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, result ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, result ? GPIO_PIN_SET : GPIO_PIN_RESET);
         
 
         HAL_Delay(1000);
-
+        printf("Hello World\r\n");
 /*
 
         if(HAL_GPIO_ReadPin(BOOT1_GPIO_Port, BOOT1_Pin) == GPIO_PIN_SET) {
@@ -80,6 +93,18 @@ int alt_main() {
 */
 	}
 
+}
+
+void printDeviceInfo() {
+    printf("\r\n");
+    printf("Bees Scale Device powered by Eugen Scobich\r\n");
+    printf("Device Address: 0x%X%X%X%X%X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
+    printf("Device Mode: %s\r\n", DEVICE_IS_MASTER ? "Master" : "Slave");
+    RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
+    RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
+
+    printf("Device Date: Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
+    printf("Device Time: Date: %02d.%02d.%02d\r\n", localTime.Hours,localTime.Minutes,localTime.Seconds);
 
 }
 
