@@ -44,6 +44,7 @@ private:
     void sendCommand(uint8_t command);
 
     void readRxFifo(uint8_t *data);
+    void clearStatusRxDrFlag();
 
     void printConfigRegister();
     void printEnableAutoAcknolageRegister();
