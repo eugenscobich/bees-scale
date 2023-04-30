@@ -28,16 +28,23 @@ private:
     GPIO_TypeDef* nrf_csn_GPIOx;
     uint16_t nrf_csn_GPIO_Pin; /* SPI Chip select */
 
-    void enableCE();
-    void disableCE();
+    bool isCeEnabled();
+    void enableCe();
+    void disableCe();
     void setCsnHigh();
     void setCsnLow();
+
+    HAL_StatusTypeDef SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
+    HAL_StatusTypeDef SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
 
     void writeRegister(uint8_t reg, uint8_t data);
     void writeRegister(uint8_t reg, uint8_t *data, uint32_t size);
     uint8_t readRegister(uint8_t reg);
     void readRegister(uint8_t reg, uint8_t *data, uint32_t size);
     void sendCommand(uint8_t command);
+
+    void readRxFifo(uint8_t *data);
+
     void printConfigRegister();
     void printEnableAutoAcknolageRegister();
     void printEnableRXAddressesRegister();
@@ -77,8 +84,12 @@ public:
     bool isInTxMode();
     bool isInRxMode();
 
-
     void setTxMode();
+
+    // Check if data is available
+    bool isDataAvailable();
+    // Return the pipe number where data is available
+    uint8_t getDataPipeAvailable();
 
     void handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count);
 
@@ -90,7 +101,7 @@ public:
     bool write(uint8_t *data);
     void readAll(uint8_t *data);
     void receive(uint8_t *data);
-    uint8_t isDataAvailable (int pipenum);
+    
     void openReadingPipe(uint64_t address, uint8_t channel);
     void init();
     void printRegister(uint8_t reg);

@@ -76,7 +76,7 @@
 #define RF_SETUP_RF_PWR_2       2
 #define RF_SETUP_RF_PWR_1       1
 #define RF_SETUP_LNA_HCURR_0    0
-#define STATUS_RX_DR_6          6
+#define STATUS_RX_DR_6          6 // Data Ready RX FIFO interrupt. Asserted when new data arrives RX FIFOc. Write 1 to clear bit.
 #define STATUS_TX_DS_5          5
 #define STATUS_MAX_RT_4         4
 #define STATUS_RX_P_NO_3        3

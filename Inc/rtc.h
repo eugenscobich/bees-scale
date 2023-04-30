@@ -44,6 +44,10 @@ void MX_RTC_Init(void);
 
 RTC_TimeTypeDef HAL_RTC_GetLocalTime();
 RTC_DateTypeDef HAL_RTC_GetLocalDate();
+void HAL_RTC_SetLocalTime(uint8_t Hours, uint8_t Minutes, uint8_t Seconds);
+void HAL_RTC_SetLocalDate(uint8_t Month, uint8_t Date, uint8_t Year);
+void HAL_RTC_SetLocalAlarm(uint8_t Hours, uint8_t Minutes, uint8_t Seconds);
+RTC_TimeTypeDef HAL_RTC_GetLocalAlarm();
 
 /* USER CODE END Prototypes */
 

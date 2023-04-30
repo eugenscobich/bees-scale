@@ -129,6 +129,38 @@ RTC_DateTypeDef HAL_RTC_GetLocalDate() {
   return sDate;
 }
 
+void HAL_RTC_SetLocalTime(uint8_t Hours, uint8_t Minutes, uint8_t Seconds) {
+  RTC_TimeTypeDef sTime = {0};
+  sTime.Hours = Hours;
+  sTime.Minutes = Minutes;
+  sTime.Seconds = Seconds;
+  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+}
+
+void HAL_RTC_SetLocalDate(uint8_t Month, uint8_t Date, uint8_t Year) {
+  RTC_DateTypeDef sDate = {0};
+  sDate.Month = Month;
+  sDate.Date = Date;
+  sDate.Year = Year;
+  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+}
+
+void HAL_RTC_SetLocalAlarm(uint8_t Hours, uint8_t Minutes, uint8_t Seconds) {
+  RTC_AlarmTypeDef sAlarm = {0};
+  sAlarm.AlarmTime.Hours = Hours;
+  sAlarm.AlarmTime.Minutes = Minutes;
+  sAlarm.AlarmTime.Seconds = Seconds;
+
+  sAlarm.Alarm = RTC_ALARM_A;
+  HAL_RTC_SetAlarm(&hrtc, &sAlarm, RTC_FORMAT_BIN);
+}
+
+RTC_TimeTypeDef HAL_RTC_GetLocalAlarm() {
+  RTC_AlarmTypeDef sAlarm = {0};
+  sAlarm.Alarm = RTC_ALARM_A;
+  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_FORMAT_BIN);
+  return sAlarm.AlarmTime;
+}
 
 
 /* USER CODE END 1 */

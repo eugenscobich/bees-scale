@@ -12,11 +12,16 @@
 NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
-uint8_t button_state = 0;
 
-uint8_t buff[100];
+uint8_t data[32] = {0};
 
 void printDeviceInfo();
+void setLocalDateTime();
+void setAlarmDateTime();
+void handleReceiveDataEvent();
+void goStandby();
+
+bool wakedUpByAlarm;
 
 int alt_main() {
     HAL_Delay(100);
@@ -25,74 +30,32 @@ int alt_main() {
     nRF24L01p.printAllRegisters();
     
     if (!DEVICE_IS_MASTER) {
-        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode()) {
+        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode() && nRF24L01p.isDataAvailable()) {
+            // waked up by NRF IRQ
+            printf("It seems we were waked up by NRF IRQ\r\n");
+            handleReceiveDataEvent();
 
+        } else if (wakedUpByAlarm) {
+            wakedUpByAlarm = false;
+            printf("It seems we were waked up by Alarm\r\n");
+            // waked up by RTC alarm
+            // TODO move NRF to RX and go standby
+
+        } else {
+            printf("It seems we were waked up by any source\r\n");
+            // TODO check current time
+            // Configure NRF to RX mode
+            // if date/time is not configured wait packet. Configure NRF to RX mode
+            while(!nRF24L01p.isDataAvailable()) {
+                // handle LED blink;
+            }
+            handleReceiveDataEvent();
         }
     }
 
-
-
-
-
-    nRF24L01p.openWritingPipe(0xF0F0F0F0E1LL, 76);
-    nRF24L01p.printAllRegisters();
-/*
-    radio.begin();                  //Starting the Wireless communication
-    radio.openWritingPipe(address); //Setting the address where we will send the data
-    radio.setPALevel(RF24_PA_MIN);  //You can set it as minimum or maximum depending on the distance between the transmitter and receiver.
-    radio.stopListening();          //This sets the module as transmitter
-*/
-    char message[] = "Hello World1\r\n";
-	while (1) { 
-        const char text[] = "Your Button State is HIGH";
-        for (uint16_t i = 0; i < strlen(message); i++) {
-            buff[i] = message[i];
-        }
-        bool result = nRF24L01p.write(buff); 
-
-        buff[0] = result ? '1' : '0';
-        buff[1] = '\r';
-        buff[2] = '\n';
-        HAL_UART_Transmit(&huart1, buff, 3, 2000);
-
-        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, result ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        
-
-        HAL_Delay(1000);
-        printf("Hello World\r\n");
-/*
-
-        if(HAL_GPIO_ReadPin(BOOT1_GPIO_Port, BOOT1_Pin) == GPIO_PIN_SET) {
-
-            const char text[] = "Your Button State is HIGH";
-            radio.write(&text, sizeof(text));   
-            
-            char message[] = "Your Button State is HIGH\r\n";
-            for (uint16_t i = 0; i < strlen(message); i++)
-            {
-                buff[i] = message[i];
-            }
-            HAL_UART_Transmit(&huart1, buff, strlen(message), 2000); 
-
-        } else {
-            const char text[] = "Your Button State is LOW";
-            radio.write(&text, sizeof(text));   
-            
-            char message[] = "Your Button State is LOW\r\n";
-            for (uint16_t i = 0; i < strlen(message); i++)
-            {
-                buff[i] = message[i];
-            }
-            HAL_UART_Transmit(&huart1, buff, strlen(message), 2000); 
-        }
-
-
-        radio.write(&button_state, sizeof(button_state));  //Sending the message to receiver 
-        HAL_UART_Transmit(&huart1, &button_state, 1, 2000); 
-        HAL_Delay(1000);
-*/
-	}
-
+    while(1) {
+        printf("Error!!!\r\n");
+    }
 }
 
 void printDeviceInfo() {
@@ -103,8 +66,69 @@ void printDeviceInfo() {
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 
-    printf("Device Date: Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
-    printf("Device Time: Date: %02d.%02d.%02d\r\n", localTime.Hours,localTime.Minutes,localTime.Seconds);
+    printf("Device Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
+    printf("Device Time: %02d.%02d.%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
 
 }
 
+void setLocalDateTime() {
+    // 0:2 bytes contains current date
+    // 3:5 bytes contains current time
+    HAL_RTC_SetLocalDate(data[0], data[1], data[1]);
+    RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
+    printf("Set Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
+
+    HAL_RTC_SetLocalTime(data[3], data[4], data[5]);
+    RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
+    printf("Set Time: %02d.%02d.%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
+    
+}
+
+void setAlarmDateTime() {
+    // 6:8 bytes contains alarm time
+    HAL_RTC_SetLocalAlarm(data[6], data[7], data[8]);
+    RTC_TimeTypeDef localAlarm = HAL_RTC_GetLocalAlarm();
+    printf("Set Alarm Time: %02d.%02d.%02d\r\n", localAlarm.Hours, localAlarm.Minutes, localAlarm.Seconds);
+}
+
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc) {
+    wakedUpByAlarm = true;
+    printf("Alarm!!!\r\n");
+}
+
+void handleReceiveDataEvent(){
+    nRF24L01p.receive(data);
+    setLocalDateTime();
+    setAlarmDateTime();
+
+    // data 0 MCU temp
+    // data 1:2 Bat voltage
+    // data 3:7 Reserved
+
+    // data 8:9 scale sensor 1
+    // data 10:11 temp sensor 1
+    // data 12:13 humidity sensor 1
+    // data 14:15 reserved
+
+    // data 16:17 scale sensor 1
+    // data 18:19 temp sensor 2
+    // data 20:21 humidity sensor 2
+    // data 22:23 reserved
+
+    // data 24:25 scale sensor 3
+    // data 26:27 temp sensor 3
+    // data 28:29 humidity sensor 3
+    // data 30:31 reserved
+
+
+    
+
+
+
+    // TODO check sensors
+    // TODO return data
+    
+    // TODO turn NRF off
+    // TODO go standby
+}

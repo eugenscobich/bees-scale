@@ -16,11 +16,47 @@ NRF24L01p::NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint
 
 }
 
-void NRF24L01p::enableCE() {
+HAL_StatusTypeDef NRF24L01p::SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size) {
+    HAL_StatusTypeDef halStatus = HAL_SPI_Receive(hspi, pData, Size, HAL_MAX_DELAY);
+    if (halStatus == HAL_BUSY) {
+        printf("HAL_SPI_Receive statuts: HAL_BUSY, retry");
+        HAL_Delay(10);
+        return SPI_Receive(hspi, pData, Size);
+    } else if (halStatus == HAL_ERROR) {
+        printf("HAL_SPI_Receive statuts: HAL_ERROR, nothing to do");
+        return halStatus;
+    } else if (halStatus == HAL_TIMEOUT) {
+        printf("HAL_SPI_Receive statuts: HAL_TIMOUT, nothing to do");
+        return halStatus;
+    }
+    return halStatus;
+}
+
+HAL_StatusTypeDef NRF24L01p::SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size) {
+    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, pData, Size, HAL_MAX_DELAY);
+    if (halStatus == HAL_BUSY) {
+        printf("HAL_SPI_Receive statuts: HAL_BUSY, retry");
+        HAL_Delay(10);
+        return SPI_Receive(hspi, pData, Size);
+    } else if (halStatus == HAL_ERROR) {
+        printf("HAL_SPI_Receive statuts: HAL_ERROR, nothing to do");
+        return halStatus;
+    } else if (halStatus == HAL_TIMEOUT) {
+        printf("HAL_SPI_Receive statuts: HAL_TIMOUT, nothing to do");
+        return halStatus;
+    }
+    return halStatus;
+}
+
+bool NRF24L01p::isCeEnabled() {
+    return HAL_GPIO_ReadPin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin) == GPIO_PIN_SET;
+}
+
+void NRF24L01p::enableCe() {
     HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_SET);
 }
 
-void NRF24L01p::disableCE() {
+void NRF24L01p::disableCe() {
     HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_RESET);
 }
 
@@ -38,10 +74,8 @@ void NRF24L01p::writeRegister(uint8_t reg, uint8_t data) {
     buf[0] = W_REGISTER | reg;
     buf[1] = data;
 
-
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 2, 1000);
-    handleSpiStatus(halStatus, 1);
+    SPI_Transmit(hspi, buf, 2);
     setCsnHigh();
 
 }
@@ -52,10 +86,8 @@ void NRF24L01p::writeRegister(uint8_t reg, uint8_t *data, uint32_t size) {
     buf[0] = W_REGISTER | reg;
 
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
-    handleSpiStatus(halStatus, 2);
-    halStatus = HAL_SPI_Transmit(hspi, data, size, 1000);
-    handleSpiStatus(halStatus, 3);
+    SPI_Transmit(hspi, buf, 1);
+    SPI_Transmit(hspi, data, size);
     setCsnHigh();
 }
 
@@ -65,10 +97,8 @@ uint8_t NRF24L01p::readRegister(uint8_t reg) {
     uint8_t buf[1];
     buf[0] = R_REGISTER | reg;
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
-    handleSpiStatus(halStatus, 4);
-    halStatus = HAL_SPI_Receive(hspi, &data, 1, 1000);
-    handleSpiStatus(halStatus, 5);
+    SPI_Transmit(hspi, buf, 1);
+    SPI_Receive(hspi, &data, 1);
     setCsnHigh();
     return data;
 }
@@ -78,18 +108,15 @@ void NRF24L01p::readRegister(uint8_t reg, uint8_t *data, uint32_t size) {
     uint8_t buf[1];
     buf[0] = R_REGISTER | reg;
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, buf, 1, 1000);
-    handleSpiStatus(halStatus, 6);
-    halStatus = HAL_SPI_Receive(hspi, data, size, 1000);
-    handleSpiStatus(halStatus, 7);
+    SPI_Transmit(hspi, buf, 1);
+    SPI_Receive(hspi, data, size);
     setCsnHigh();
 }
 
 
 void NRF24L01p::sendCommand(uint8_t command) {
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, &command, 1, 1000);
-    handleSpiStatus(halStatus, 8);
+    SPI_Transmit(hspi, &command, 1);
     setCsnHigh();
 }
 
@@ -121,7 +148,7 @@ bool NRF24L01p::isPowerDown() {
 
 bool NRF24L01p::isInRxMode() {
     int8_t data = readRegister(CONFIG);
-    return _CHECK_BIT(data, CONFIG_PRIM_RX_0);
+    return _CHECK_BIT(data, CONFIG_PRIM_RX_0) && isCeEnabled();
 }
 
 bool NRF24L01p::isInTxMode() {
@@ -148,7 +175,7 @@ bool NRF24L01p::setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate) {
 
 void NRF24L01p::reset() {
     // Reset pins
-    disableCE();
+    disableCe();
     // Reset registers
     writeRegister(CONFIG, 0x08); // Enabled CRC
     writeRegister(EN_AA, 0x3F); // All pipes have auto acknoladge
@@ -176,7 +203,7 @@ void NRF24L01p::reset() {
     writeRegister(FIFO_STATUS, 0x11);
     writeRegister(DYNPD, 0x00);
     writeRegister(FEATURE, 0x00);
-    enableCE();
+    enableCe();
 }
 
 
@@ -195,14 +222,14 @@ void NRF24L01p::powerDown() {
 }
 
 void NRF24L01p::openWritingPipe(uint64_t address, uint8_t cannel) {
-    disableCE();
+    disableCe();
     writeRegister(RF_CH, cannel);
     writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t*>(&address), 5);
     writeRegister(TX_ADDR, reinterpret_cast<uint8_t*>(&address), 5);
 
     powerUp();
     setTxMode();
-    enableCE();
+    enableCe();
 }
 
 
@@ -217,9 +244,9 @@ bool NRF24L01p::write(uint8_t *data) {
     uint8_t cmd = W_TX_PAYLOAD;
 
     setCsnLow();
-    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, &cmd, 1, 1000);
+    HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, &cmd, 1, HAL_MAX_DELAY);
     handleSpiStatus(halStatus, 8);
-    halStatus = HAL_SPI_Transmit(hspi, data, 32, 1000);
+    halStatus = HAL_SPI_Transmit(hspi, data, 32, HAL_MAX_DELAY);
     handleSpiStatus(halStatus, 9);
     setCsnHigh();
 
@@ -242,7 +269,7 @@ bool NRF24L01p::write(uint8_t *data) {
 
 void NRF24L01p::openReadingPipe(uint64_t address, uint8_t channel) {
 	// disable the chip before configuring the device
-	disableCE();
+	disableCe();
 
 	writeRegister(STATUS, 0x00);
 	writeRegister(RF_CH, channel);  // select the channel
@@ -273,44 +300,39 @@ void NRF24L01p::openReadingPipe(uint64_t address, uint8_t channel) {
 	writeRegister(CONFIG, config);
 
 	// Enable the chip after configuring the device
-	enableCE();
+	enableCe();
 }
 
 
-uint8_t NRF24L01p::isDataAvailable (int pipenum) {
-	uint8_t status = readRegister(STATUS);
-	if ((status&(1<<6))&&(status&(pipenum<<1))) {
-		writeRegister(STATUS, (1<<6));
-		return 1;
-	}
-	return 0;
+bool NRF24L01p::isDataAvailable() {
+    uint8_t data = readRegister(STATUS);
+    return _CHECK_BIT(data, STATUS_RX_DR_6);
+    // TODO check pipe number
 }
 
+uint8_t NRF24L01p::getDataPipeAvailable() {
+    uint8_t data = readRegister(STATUS);
+    return (data & (_BV(STATUS_RX_P_NO_3) | _BV(STATUS_RX_P_NO_2) | _BV(STATUS_RX_P_NO_1)) >> 1);
+}
+
+void NRF24L01p::readRxFifo(uint8_t *data) {
+    setCsnLow();
+	uint8_t cmdToSend = R_RX_PAYLOAD;
+	SPI_Transmit(hspi, &cmdToSend, 1);
+	SPI_Receive(hspi, data, sizeof(data));
+    setCsnHigh();
+}
+
+void NRF24L01p::clearStatusRxDrFlag(){
+    uint8_t data = readRegister(STATUS);
+    data |= _BV(STATUS_RX_DR_6);
+    writeRegister(STATUS, data);
+}
 
 void NRF24L01p::receive(uint8_t *data) {
-	uint8_t cmdtosend = 0;
-
-	// select the device
-
-    setCsnLow();
-	// payload command
-	cmdtosend = R_RX_PAYLOAD;
-	HAL_SPI_Transmit(hspi, &cmdtosend, 1, 1000);
-
-	// Receive the payload
-	HAL_SPI_Receive(hspi, data, 32, 1000);
-
-	// Unselect the device
-
-    setCsnHigh();
-
-	HAL_Delay(1);
-
-	cmdtosend = FLUSH_RX;
-	sendCommand(cmdtosend);
+    readRxFifo(data);
+    clearStatusRxDrFlag();
 }
-
-
 
 // Read all the Register data
 void NRF24L01p::readAll (uint8_t *data)
@@ -356,7 +378,7 @@ void NRF24L01p::handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count) {
         {
             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
             if (_status == HAL_ERROR) {
-                HAL_Delay(1000);
+                HAL_Delay(HAL_MAX_DELAY);
             }
             if (_status == HAL_TIMEOUT) {
                 HAL_Delay(3000);
