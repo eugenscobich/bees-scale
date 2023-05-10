@@ -25,7 +25,19 @@ bool wakedUpByAlarm;
 
 int alt_main() {
     HAL_Delay(100);
+    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
     printDeviceInfo();
+
+    
+
+
+
+
+
+
+
+
+
     
     nRF24L01p.printAllRegisters();
     
@@ -46,9 +58,9 @@ int alt_main() {
             // TODO check current time
             // Configure NRF to RX mode
             // if date/time is not configured wait packet. Configure NRF to RX mode
-            while(!nRF24L01p.isDataAvailable()) {
+            //while(!nRF24L01p.isDataAvailable()) {
                 // handle LED blink;
-            }
+            //}
             handleReceiveDataEvent();
         }
     }

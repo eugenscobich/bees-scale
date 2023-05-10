@@ -158,7 +158,7 @@ void HAL_RTC_SetLocalAlarm(uint8_t Hours, uint8_t Minutes, uint8_t Seconds) {
 RTC_TimeTypeDef HAL_RTC_GetLocalAlarm() {
   RTC_AlarmTypeDef sAlarm = {0};
   sAlarm.Alarm = RTC_ALARM_A;
-  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_FORMAT_BIN);
+  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_ALARM_A, RTC_FORMAT_BIN);
   return sAlarm.AlarmTime;
 }
 
