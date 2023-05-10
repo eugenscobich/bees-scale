@@ -45,14 +45,14 @@ void MX_RTC_Init(void)
   */
   hrtc.Instance = RTC;
   hrtc.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
-  hrtc.Init.OutPut = RTC_OUTPUTSOURCE_ALARM;
+  hrtc.Init.OutPut = RTC_OUTPUTSOURCE_NONE;
   if (HAL_RTC_Init(&hrtc) != HAL_OK)
   {
     Error_Handler();
   }
 
   /* USER CODE BEGIN Check_RTC_BKUP */
-
+  return;
   /* USER CODE END Check_RTC_BKUP */
 
   /** Initialize RTC and set the Time and Date
@@ -158,7 +158,7 @@ void HAL_RTC_SetLocalAlarm(uint8_t Hours, uint8_t Minutes, uint8_t Seconds) {
 RTC_TimeTypeDef HAL_RTC_GetLocalAlarm() {
   RTC_AlarmTypeDef sAlarm = {0};
   sAlarm.Alarm = RTC_ALARM_A;
-  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_FORMAT_BIN);
+  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_ALARM_A, RTC_FORMAT_BIN);
   return sAlarm.AlarmTime;
 }
 
