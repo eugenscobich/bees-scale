@@ -19,9 +19,8 @@ void printDeviceInfo();
 void setLocalDateTime();
 void setAlarmDateTime();
 void handleReceiveDataEvent();
-void goStandby();
+void goToStandByMode();
 
-bool wakedUpByAlarm;
 
 int alt_main() {
     HAL_Delay(100);
@@ -39,29 +38,83 @@ int alt_main() {
 
 
     
-    nRF24L01p.printAllRegisters();
+    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
+
+    //nRF24L01p.printAllRegisters();
     
+    //date
+    data[0] = 0x02;
+    data[1] = 0x02;
+    data[2] = 0x02;
+
+    // time
+    data[3] = 0x02;
+    data[4] = 0x02;
+    data[5] = 0x01;
+
+    // alarm
+    data[6] = 0x02;
+    data[7] = 0x02;
+    data[8] = 0x0A;
+
+
     if (!DEVICE_IS_MASTER) {
         if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode() && nRF24L01p.isDataAvailable()) {
             // waked up by NRF IRQ
             printf("It seems we were waked up by NRF IRQ\r\n");
             handleReceiveDataEvent();
 
-        } else if (wakedUpByAlarm) {
-            wakedUpByAlarm = false;
-            printf("It seems we were waked up by Alarm\r\n");
+        } else if ((PWR->CSR) & (PWR_CSR_SBF)) {
+            
+            printf("It seems we were waked up from standby\r\n");
             // waked up by RTC alarm
             // TODO move NRF to RX and go standby
 
+            RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
+            
+            // time
+            data[6] = localTime.Hours;
+            data[7] = localTime.Minutes;
+            data[8] = localTime.Seconds;
+
+            data[8] += 10;
+            if (data[8] >= 60) {
+                data[8] -= 60;
+                data[7] += 1;
+            }
+            if (data[7] >= 60) {
+                data[7] -= 60;
+                data[6] += 1;
+            }
+
+            if (data[6] >= 24) {
+                data[6] -= 24;
+            }
+
+            // TODO check years;
+            setAlarmDateTime();
+            HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+            HAL_Delay(2000);
+            goToStandByMode();
         } else {
-            printf("It seems we were waked up by any source\r\n");
+            printf("It seems we were waked up by power on\r\n");
             // TODO check current time
             // Configure NRF to RX mode
             // if date/time is not configured wait packet. Configure NRF to RX mode
-            //while(!nRF24L01p.isDataAvailable()) {
+            
+            /*
+            while(!nRF24L01p.isDataAvailable()) {
                 // handle LED blink;
             //}
             handleReceiveDataEvent();
+            */
+            
+            setLocalDateTime();
+            setAlarmDateTime();
+            HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+            HAL_Delay(2000);
+            goToStandByMode();
+          
         }
     }
 
@@ -73,13 +126,13 @@ int alt_main() {
 void printDeviceInfo() {
     printf("\r\n");
     printf("Bees Scale Device powered by Eugen Scobich\r\n");
-    printf("Device Address: 0x%X%X%X%X%X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
+    printf("Device Address: 0x%0X%0X%0X%0X%0X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
     printf("Device Mode: %s\r\n", DEVICE_IS_MASTER ? "Master" : "Slave");
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 
     printf("Device Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
-    printf("Device Time: %02d.%02d.%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
+    printf("Device Time: %02d:%02d:%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
 
 }
 
@@ -92,7 +145,7 @@ void setLocalDateTime() {
 
     HAL_RTC_SetLocalTime(data[3], data[4], data[5]);
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-    printf("Set Time: %02d.%02d.%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
+    printf("Set Time: %02d:%02d:%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
     
 }
 
@@ -100,12 +153,11 @@ void setAlarmDateTime() {
     // 6:8 bytes contains alarm time
     HAL_RTC_SetLocalAlarm(data[6], data[7], data[8]);
     RTC_TimeTypeDef localAlarm = HAL_RTC_GetLocalAlarm();
-    printf("Set Alarm Time: %02d.%02d.%02d\r\n", localAlarm.Hours, localAlarm.Minutes, localAlarm.Seconds);
+    printf("Set Alarm Time: %02d:%02d:%02d\r\n", localAlarm.Hours, localAlarm.Minutes, localAlarm.Seconds);
 }
 
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc) {
-    wakedUpByAlarm = true;
     printf("Alarm!!!\r\n");
 }
 
@@ -143,4 +195,14 @@ void handleReceiveDataEvent(){
     
     // TODO turn NRF off
     // TODO go standby
+}
+
+void goToStandByMode() {
+    printf("Go to StandBy Mode\r\n");
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+    RCC->APB1ENR |= (RCC_APB1ENR_PWREN);
+    PWR->CR |= PWR_CR_CWUF;
+    PWR->CSR |= PWR_CSR_EWUP;
+    PWR->CR |= PWR_CR_CSBF;
+    HAL_PWR_EnterSTANDBYMode();
 }

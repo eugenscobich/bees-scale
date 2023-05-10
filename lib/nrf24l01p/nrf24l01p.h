@@ -7,8 +7,8 @@
 #include <stdio.h>
 
 
-#define _BV(b) (1UL << (b))
-#define _CHECK_BIT(data, bit) ((data & (1UL << (bit))) > 0)
+#define _BV(bit) (1UL << (bit))
+#define _CHECK_BIT(data, bitNumber) ((data & _BV(bitNumber)) > 0)
 
 typedef enum {
     NRF24L01p_1MBPS = 0,
