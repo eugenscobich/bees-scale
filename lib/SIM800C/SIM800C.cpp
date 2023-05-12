@@ -9,67 +9,58 @@ SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, u
     SIM800C_DTR_GPIOx(_SIM800C_DTR_GPIOx),
     SIM800C_DTR_GPIO_Pin(_SIM800C_DTR_GPIO_Pin)
 {
-    sim800cState = {0};
-}
-
-void SIM800C::setState(uint8_t newState) {
-    sim800cState.previousState = sim800cState.currentState;
-    sim800cState.currentState = newState;
+    sim800cCmdResult = {0};
 }
 
 void SIM800C::txCpltCallback() {
-    setState(SIM800C_STATE_TX_COMPLETED);
+    txComplete = true;
 }
 
 void SIM800C::rxCpltCallback() {
-    setState(SIM800C_STATE_RX_COMPLETED);
+    rxComplete = true;
 }
 
-SIM800CState SIM800C::update() {
-    uint32_t currentHalTick = HAL_GetTick();
-    if (sim800cState.currentState != sim800cState.previousState) {
-        sim800cState.previousState = sim800cState.currentState;
-        if (sim800cState.currentState == SIM800C_STATE_TX_COMPLETED) {
-            printf("SIM800C: TX Completed (Command sent: %s)\r\n", sim800cState.cmd);
-            sim800cState.currentState = SIM800C_STATE_WAITING_RESPONSE;
-        }
-
-        if (sim800cState.currentState == SIM800C_STATE_RX_COMPLETED) {
-            printf("SIM800C: RX Completed\r\n");
-            printf("SIM800C: %s", (char *)sim800cState.rxBuffer);
-            // check pattern
-            if(strstr((char *)sim800cState.rxBuffer, expectedPattern)) {
-                setState(SIM800C_STATE_PATTERN_MATCHED);
-            } else {
-                setState(SIM800C_STATE_ERROR);
-            }
-        }
-        if (sim800cState.currentState == SIM800C_STATE_PATTERN_MATCHED) {
-            printf("SIM800C: Patern Matched\r\n");
-        }
-    }
-
-    if (startReceiveTick > 0 && startReceiveTick + receiveTimeoutInTicks < currentHalTick) {
-        printf("SIM800C: RX Timout\r\n");
-        printf("SIM800C: %s", (char *)sim800cState.rxBuffer);
-        // check pattern
-        if(strstr((char *)sim800cState.rxBuffer, expectedPattern)) {
-            setState(SIM800C_STATE_PATTERN_MATCHED);
-        } else {
-            setState(SIM800C_STATE_ERROR);
-        }
-    }
-    return sim800cState;
-}
-
-void SIM800C::sendCmdAndSetExpectedPatternAndTimeout(char* cmd, char* _expectedPattern, uint16_t timeout) {
-    sim800cState.cmd = cmd;
-    sim800cState.currentState = SIM800C_STATE_RUNNING;
-    sim800cState.previousState = SIM800C_STATE_UNKNOWN;
-    expectedPattern = _expectedPattern;
-    receiveTimeoutInTicks = timeout;
-    startReceiveTick = HAL_GetTick();
-    memset(sim800cState.rxBuffer, 0, sizeof(sim800cState.rxBuffer));
+SIM800CCmdResult* SIM800C::sendCmd(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries) {
+    sim800cCmdResult->cmd = cmd;
+    memset(sim800cCmdResult->rxBuffer, 0, sizeof(sim800cCmdResult->rxBuffer));
     HAL_UART_Transmit_IT(huart, (uint8_t*)cmd, strlen(cmd));
-    HAL_UART_Receive_IT(huart, sim800cState.rxBuffer, sizeof(sim800cState.rxBuffer));
+    rxComplete = false;
+    HAL_UART_Receive_IT(huart, (uint8_t*)sim800cCmdResult->rxBuffer, sizeof(sim800cCmdResult->rxBuffer));
+    uint32_t startReceiveTick = HAL_GetTick();
+    while (1) {
+        if (txComplete) {
+            printf("SIM800C TX: %s\r\n---------------\r\n", cmd);
+        }
+
+        if (rxComplete) {
+            printf("SIM800C RX: %s\r\n---------------\r\n", (char *)sim800cCmdResult->rxBuffer);
+            return handleResponse(cmd, expectedResponse, receiveTimeoutInTicks, numberOfRetries);
+        }
+        
+        uint32_t currentTick = HAL_GetTick();
+        if (receiveTimeoutInTicks + startReceiveTick < currentTick) {
+            printf("SIM800C RX TIMEOUT: %s\r\n---------------\r\n", (char *)sim800cCmdResult->rxBuffer);
+            return handleResponse(cmd, expectedResponse, receiveTimeoutInTicks, numberOfRetries);
+        }
+    }
+    return sim800cCmdResult;
+}
+
+SIM800CCmdResult* SIM800C::handleResponse(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries) {
+    char *foundExpectedResponse = strstr((char *)sim800cCmdResult->rxBuffer, expectedResponse);
+    if(foundExpectedResponse) {
+        sim800cCmdResult->status = SIM800C_SUCCESS;
+        sim800cCmdResult->foundExpectedResponse = foundExpectedResponse;
+        return sim800cCmdResult;
+    } else {
+        if (numberOfRetries == 0) {
+            sim800cCmdResult->status = SIM800C_UNEXPECTED_RESPONSE;
+            sim800cCmdResult->foundExpectedResponse = NULL;
+            memset(sim800cCmdResult->rxBuffer, 0, sizeof(sim800cCmdResult->rxBuffer));
+            return sim800cCmdResult;
+        } else {
+            HAL_Delay(100);
+            return sendCmd(cmd, expectedResponse, receiveTimeoutInTicks, --numberOfRetries);
+        }
+    }
 }

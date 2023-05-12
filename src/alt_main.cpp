@@ -7,15 +7,11 @@
 #include "NRF24L01p.h"
 #include "SIM800C.h"
 #include "modem_service.h"
-#include "led_service.h"
-#include "state.h"
 #include <stdio.h>
 
 NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
 SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin);
 ModemService modemService(&sim800c);
-LedService ledService;
-State state;
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
@@ -30,57 +26,51 @@ void setAlarmDateTime();
 void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromStandby();
-
+void error(char* message, uint8_t severityLevel = 5);
 
 int alt_main() {
     HAL_Delay(100);
-    deviceIsMaster = modemService.isModemPresent();
+    deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
     printDeviceInfo();
     if (deviceWasWakedUpFromStandby) {
         // TODO handle NRF IRQ, or alarm event
     } else {
         // TODO Check modem and power on if need
-        state.nextCmd = CMD_CHECK_MODEM_AND_POWER_ON_IF_NEED;
-    }
+        if (deviceIsMaster) {
+            if (modemService.startSIM800CIfNeed() == MODEM_SUCCESS) {
+                if (modemService.findSMSWithSettingsAndConfigureModem() == MODEM_SUCCESS) {
+                
 
-    //ledService.blinkGreenLed(500);
 
-    if (deviceIsMaster) {
-        
-    } else {
 
+
+                } else {
+                    // TODO wait for configuration sms
+                }
+            } else {
+                error("Wasn't able to start SIM800C module");
+            }
+        } else {
+            // todo got and wait for nrf channel
+        }
     }
 
     while(1) {
-        if (state.currentCmd != state.nextCmd) {
-            state.previousCmd = state.currentCmd;
-            state.currentCmd = state.nextCmd;
-            state.nextCmd = CMD_UNKNOWN;
-            if (state.currentCmd == CMD_CHECK_MODEM_AND_POWER_ON_IF_NEED) {
-                ledService.blinkGreenLed(500);
-                modemService.checkModemAndPowerOnIfNeed();
-            }
-        }
-
-
-
-        ledService.update(&state);
-        modemService.update(&state);
-
-
-        if (state.currentState != state.previousState) {
-            state.previousState = state.currentState;
-            if (state.currentState == STATE_MODEM_POWERED_ON) {
-                state.nextCmd = CMD_READ_SMS;
-            }
-        }
+        error("Infenite while must not happen", 2);
     }
 }
 
 
 
-
+void error(char* message, uint8_t severityLevel) {
+    printf("Error of severity: %d, Message: %s\r\n", severityLevel, message);
+    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
+    while (1) {
+        HAL_Delay(100 * severityLevel);
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+    }
+}
 
 
 
@@ -181,7 +171,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         sim800c.rxCpltCallback();
     }
 }
-
 
 bool wakedUpFromStandby() {
     return (PWR->CSR) & (PWR_CSR_SBF);

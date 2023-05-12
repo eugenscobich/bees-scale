@@ -4,21 +4,22 @@
 #include "stm32f1xx_hal.h"
 #include <stdio.h>
 
-
-#define SIM800C_STATE_UNKNOWN           0
-#define SIM800C_STATE_RUNNING           1
-#define SIM800C_STATE_TX_COMPLETED      2
-#define SIM800C_STATE_RX_COMPLETED      3
-#define SIM800C_STATE_WAITING_RESPONSE  4
-#define SIM800C_STATE_PATTERN_MATCHED   5
-#define SIM800C_STATE_ERROR             6
+typedef enum {
+	SIM800C_SUCCESS,
+	SIM800C_ERROR,
+	SIM800C_TIMEOUT,
+	SIM800C_NO_RESPONSE,
+	SIM800C_UNEXPECTED_RESPONSE,
+	SIM800C_OVERFLOW,
+	SIM800C_BAD_PARAMETER
+} SIM800CCmdResultStatus;
 
 typedef struct {
     char* cmd;
+    SIM800CCmdResultStatus status;
+    char* foundExpectedResponse;
     uint8_t rxBuffer[100];
-    uint8_t previousState;
-    uint8_t currentState;
-} SIM800CState;
+} SIM800CCmdResult;
 
 class SIM800C {
 
@@ -31,24 +32,20 @@ private:
     GPIO_TypeDef* SIM800C_DTR_GPIOx;
     uint16_t SIM800C_DTR_GPIO_Pin;
 
-    SIM800CState sim800cState;
+    SIM800CCmdResult* sim800cCmdResult;
 
-    char* expectedPattern;
+    char* expectedResponse;
 
     volatile bool txComplete = false;
     volatile bool rxComplete = false;
 
-    uint32_t startReceiveTick;
-    uint16_t receiveTimeoutInTicks;
-
-    void setState(uint8_t newState);
+    SIM800CCmdResult* handleResponse(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries = 0);
     
 public:
     SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin);
-    SIM800CState update();
     void rxCpltCallback();
     void txCpltCallback();
-    void sendCmdAndSetExpectedPatternAndTimeout(char* command, char* expectedPattern, uint16_t timeout);
+    SIM800CCmdResult* sendCmd(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries = 0);
 };
 
 #endif // __SIM800C_H__
