@@ -5,129 +5,195 @@
 #include "usart.h"
 #include "rtc.h"
 #include "NRF24L01p.h"
+#include "SIM800C.h"
+#include "modem_service.h"
+#include "led_service.h"
+#include "state.h"
 #include <stdio.h>
 
-#define DEVICE_IS_MASTER false
-
 NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
+SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin);
+ModemService modemService(&sim800c);
+LedService ledService;
+State state;
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
 uint8_t data[32] = {0};
+
+bool deviceIsMaster = false;
+bool deviceWasWakedUpFromStandby = false;
 
 void printDeviceInfo();
 void setLocalDateTime();
 void setAlarmDateTime();
 void handleReceiveDataEvent();
 void goToStandByMode();
+bool wakedUpFromStandby();
 
 
 int alt_main() {
     HAL_Delay(100);
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
+    deviceIsMaster = modemService.isModemPresent();
+    deviceWasWakedUpFromStandby = wakedUpFromStandby();
     printDeviceInfo();
+    if (deviceWasWakedUpFromStandby) {
+        // TODO handle NRF IRQ, or alarm event
+    } else {
+        // TODO Check modem and power on if need
+        state.nextCmd = CMD_CHECK_MODEM_AND_POWER_ON_IF_NEED;
+    }
 
-    
+    //ledService.blinkGreenLed(500);
 
+    if (deviceIsMaster) {
+        
+    } else {
 
-
-
-
-
-
-
-
-    
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
-
-    //nRF24L01p.printAllRegisters();
-    
-    //date
-    data[0] = 0x02;
-    data[1] = 0x02;
-    data[2] = 0x02;
-
-    // time
-    data[3] = 0x02;
-    data[4] = 0x02;
-    data[5] = 0x01;
-
-    // alarm
-    data[6] = 0x02;
-    data[7] = 0x02;
-    data[8] = 0x0A;
-
-
-    if (!DEVICE_IS_MASTER) {
-        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode() && nRF24L01p.isDataAvailable()) {
-            // waked up by NRF IRQ
-            printf("It seems we were waked up by NRF IRQ\r\n");
-            handleReceiveDataEvent();
-
-        } else if ((PWR->CSR) & (PWR_CSR_SBF)) {
-            
-            printf("It seems we were waked up from standby\r\n");
-            // waked up by RTC alarm
-            // TODO move NRF to RX and go standby
-
-            RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-            
-            // time
-            data[6] = localTime.Hours;
-            data[7] = localTime.Minutes;
-            data[8] = localTime.Seconds;
-
-            data[8] += 10;
-            if (data[8] >= 60) {
-                data[8] -= 60;
-                data[7] += 1;
-            }
-            if (data[7] >= 60) {
-                data[7] -= 60;
-                data[6] += 1;
-            }
-
-            if (data[6] >= 24) {
-                data[6] -= 24;
-            }
-
-            // TODO check years;
-            setAlarmDateTime();
-            HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
-            HAL_Delay(2000);
-            goToStandByMode();
-        } else {
-            printf("It seems we were waked up by power on\r\n");
-            // TODO check current time
-            // Configure NRF to RX mode
-            // if date/time is not configured wait packet. Configure NRF to RX mode
-            
-            /*
-            while(!nRF24L01p.isDataAvailable()) {
-                // handle LED blink;
-            //}
-            handleReceiveDataEvent();
-            */
-            
-            setLocalDateTime();
-            setAlarmDateTime();
-            HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
-            HAL_Delay(2000);
-            goToStandByMode();
-          
-        }
     }
 
     while(1) {
-        printf("Error!!!\r\n");
+        if (state.currentCmd != state.nextCmd) {
+            state.previousCmd = state.currentCmd;
+            state.currentCmd = state.nextCmd;
+            state.nextCmd = CMD_UNKNOWN;
+            if (state.currentCmd == CMD_CHECK_MODEM_AND_POWER_ON_IF_NEED) {
+                ledService.blinkGreenLed(500);
+                modemService.checkModemAndPowerOnIfNeed();
+            }
+        }
+
+
+
+        ledService.update(&state);
+        modemService.update(&state);
+
+
+        if (state.currentState != state.previousState) {
+            state.previousState = state.currentState;
+            if (state.currentState == STATE_MODEM_POWERED_ON) {
+                state.nextCmd = CMD_READ_SMS;
+            }
+        }
     }
 }
+
+
+
+
+
+
+
+
+/*
+        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
+
+        //nRF24L01p.printAllRegisters();
+        
+        //date
+        data[0] = 0x02;
+        data[1] = 0x02;
+        data[2] = 0x02;
+
+        // time
+        data[3] = 0x02;
+        data[4] = 0x02;
+        data[5] = 0x01;
+
+        // alarm
+        data[6] = 0x02;
+        data[7] = 0x02;
+        data[8] = 0x0A;
+
+
+        if (!deviceIsMaster) {
+            if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode() && nRF24L01p.isDataAvailable()) {
+                // waked up by NRF IRQ
+                printf("It seems we were waked up by NRF IRQ\r\n");
+                handleReceiveDataEvent();
+
+            } else if ((PWR->CSR) & (PWR_CSR_SBF)) {
+                
+                printf("It seems we were waked up from standby\r\n");
+                // waked up by RTC alarm
+                // TODO move NRF to RX and go standby
+
+                RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
+                
+                // time
+                data[6] = localTime.Hours;
+                data[7] = localTime.Minutes;
+                data[8] = localTime.Seconds;
+
+                data[8] += 10;
+                if (data[8] >= 60) {
+                    data[8] -= 60;
+                    data[7] += 1;
+                }
+                if (data[7] >= 60) {
+                    data[7] -= 60;
+                    data[6] += 1;
+                }
+
+                if (data[6] >= 24) {
+                    data[6] -= 24;
+                }
+
+                // TODO check years;
+                setAlarmDateTime();
+                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+                HAL_Delay(2000);
+                goToStandByMode();
+            } else {
+                printf("It seems we were waked up by power on\r\n");
+                // TODO check current time
+                // Configure NRF to RX mode
+                // if date/time is not configured wait packet. Configure NRF to RX mode
+                
+                
+                //while(!nRF24L01p.isDataAvailable()) {
+                    // handle LED blink;
+                //}
+                handleReceiveDataEvent();
+                
+                
+                setLocalDateTime();
+                setAlarmDateTime();
+                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+                HAL_Delay(2000);
+                goToStandByMode();
+            
+            }
+        }
+
+    
+        printf("Error!!!\r\n");
+        */
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+   if (huart == &huart1) {
+        sim800c.txCpltCallback();
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+   if (huart == &huart1) {
+        sim800c.rxCpltCallback();
+    }
+}
+
+
+bool wakedUpFromStandby() {
+    return (PWR->CSR) & (PWR_CSR_SBF);
+}
+
 
 void printDeviceInfo() {
     printf("\r\n");
     printf("Bees Scale Device powered by Eugen Scobich\r\n");
     printf("Device Address: 0x%0X%0X%0X%0X%0X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
-    printf("Device Mode: %s\r\n", DEVICE_IS_MASTER ? "Master" : "Slave");
+    printf("Device Mode: %s\r\n", deviceIsMaster ? "Master" : "Slave");
+    printf("Waked up from: %s\r\n", deviceWasWakedUpFromStandby ? "Standby" : "Power On");
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 

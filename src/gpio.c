@@ -56,7 +56,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, NRF_CSN_Pin|SIM800C_PWR_Pin|SIM800C_DTR_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, NRF_CSN_Pin|SIM800C_DTR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, NRF_CE_Pin|HX711_SCK_Pin|HTU21D_1_Pin|HTU21D_2_Pin
@@ -110,12 +110,18 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(HX711_DT_2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PAPin PAPin */
-  GPIO_InitStruct.Pin = SIM800C_PWR_Pin|SIM800C_DTR_Pin;
+  /*Configure GPIO pin : PtPin */
+  GPIO_InitStruct.Pin = SIM800C_PWR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(SIM800C_PWR_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PtPin */
+  GPIO_InitStruct.Pin = SIM800C_DTR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(SIM800C_DTR_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PtPin */
   GPIO_InitStruct.Pin = NRF_IRQ_Pin;
@@ -126,5 +132,13 @@ void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 2 */
-
+void changeSim800CPwrPinToOuput() {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    /*Configure GPIO pins : PAPin PAPin */
+    GPIO_InitStruct.Pin = SIM800C_PWR_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(SIM800C_PWR_GPIO_Port, &GPIO_InitStruct);
+}
 /* USER CODE END 2 */
