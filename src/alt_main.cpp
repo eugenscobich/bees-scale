@@ -19,6 +19,7 @@ uint8_t data[32] = {0};
 
 bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
+uint8_t uart2RxBuffer[1];
 
 void printDeviceInfo();
 void setLocalDateTime();
@@ -30,6 +31,7 @@ void error(char* message, uint8_t severityLevel = 5);
 
 int alt_main() {
     HAL_Delay(100);
+    HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
     deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
     printDeviceInfo();
@@ -39,10 +41,8 @@ int alt_main() {
         // TODO Check modem and power on if need
         if (deviceIsMaster) {
             if (modemService.startSIM800CIfNeed() == MODEM_SUCCESS) {
+                printf("SIM800C is started.\r\n");
                 if (modemService.findSMSWithSettingsAndConfigureModem() == MODEM_SUCCESS) {
-                
-
-
 
 
                 } else {
@@ -161,14 +161,21 @@ void error(char* message, uint8_t severityLevel) {
         */
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-   if (huart == &huart1) {
+    if(huart->Instance == USART1) {
         sim800c.txCpltCallback();
     }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-   if (huart == &huart1) {
+    if(huart->Instance == USART1) {
         sim800c.rxCpltCallback();
+    }
+    //sim800c.rxCpltCallback();
+    if(huart->Instance == USART2) {
+        //HAL_UART_Transmit(&huart2, uart2RxBuffer, 1, 1000);
+        HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
+        HAL_UART_Transmit(&huart1, uart2RxBuffer, 1, 1000);
+        
     }
 }
 

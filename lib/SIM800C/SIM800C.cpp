@@ -1,4 +1,5 @@
 #include "SIM800C.h"
+#include "usart.h"
 #include <stdio.h>
 #include <cstring>
 
@@ -13,53 +14,80 @@ SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, u
 }
 
 void SIM800C::txCpltCallback() {
-    txComplete = true;
+
 }
 
 void SIM800C::rxCpltCallback() {
-    rxComplete = true;
+    //printf((char*)rxBuffer);
+    if (rxBufferIndex > (rxBufferSize - 1)) {
+        rxBufferIndex = 0;
+    }
+    sim800cCmdResult.rxBuffer[rxBufferIndex++] = rxBuffer[0];
+    HAL_UART_Receive_IT(huart, rxBuffer, 1);
+    HAL_UART_Transmit(&huart2, rxBuffer, 1, 1000);
 }
 
-SIM800CCmdResult* SIM800C::sendCmd(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries) {
-    sim800cCmdResult->cmd = cmd;
-    memset(sim800cCmdResult->rxBuffer, 0, sizeof(sim800cCmdResult->rxBuffer));
-    HAL_UART_Transmit_IT(huart, (uint8_t*)cmd, strlen(cmd));
-    rxComplete = false;
-    HAL_UART_Receive_IT(huart, (uint8_t*)sim800cCmdResult->rxBuffer, sizeof(sim800cCmdResult->rxBuffer));
-    uint32_t startReceiveTick = HAL_GetTick();
-    while (1) {
-        if (txComplete) {
-            printf("SIM800C TX: %s\r\n---------------\r\n", cmd);
-        }
-
-        if (rxComplete) {
-            printf("SIM800C RX: %s\r\n---------------\r\n", (char *)sim800cCmdResult->rxBuffer);
-            return handleResponse(cmd, expectedResponse, receiveTimeoutInTicks, numberOfRetries);
-        }
-        
-        uint32_t currentTick = HAL_GetTick();
-        if (receiveTimeoutInTicks + startReceiveTick < currentTick) {
-            printf("SIM800C RX TIMEOUT: %s\r\n---------------\r\n", (char *)sim800cCmdResult->rxBuffer);
-            return handleResponse(cmd, expectedResponse, receiveTimeoutInTicks, numberOfRetries);
-        }
+SIM800CCmdResult* SIM800C::sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries) {
+    sim800cCmdResult.cmd = cmd;
+    rxBufferIndex = 0;
+    memset(sim800cCmdResult.rxBuffer, 0, sizeof(sim800cCmdResult.rxBuffer));
+      
+    HAL_StatusTypeDef result = HAL_UART_Transmit(huart, (uint8_t*)cmd, strlen(cmd), 1000);
+    if (result == HAL_OK) {
+        printf("SIM800C TX(%d): %s\r\n---------------\r\n", numberOfRetries, sim800cCmdResult.cmd);
+    } else {
+        printf("SIM800C TX FAIL(%d): %s\r\n---------------\r\n", numberOfRetries, sim800cCmdResult.cmd);
     }
-    return sim800cCmdResult;
+
+    HAL_UART_Receive_IT(huart, rxBuffer, 1);
+    HAL_Delay(100);
+    uint16_t _receiveTimeoutInTicks = receiveTimeoutInTicks;
+    while (true) {
+        char* foundExpectedResponse = strstr((char *)sim800cCmdResult.rxBuffer, expectedResponse);
+        if(foundExpectedResponse) {
+            if (_receiveTimeoutInTicks != receiveTimeoutInTicks) {
+               printf("\r\n"); 
+            }
+            printf("SIM800C RX(%d): %s\r\n---------------\r\n", numberOfRetries, (char *)sim800cCmdResult.rxBuffer);
+            sim800cCmdResult.status = SIM800C_SUCCESS;
+            sim800cCmdResult.foundExpectedResponse = foundExpectedResponse;
+            return &sim800cCmdResult;
+        } 
+
+        if (_receiveTimeoutInTicks == 0) {
+            printf("\r\nSIM800C RX TIMEOUT(%d): %s\r\n---------------\r\n", numberOfRetries, (char *)sim800cCmdResult.rxBuffer);
+            if (numberOfRetries == 0) {
+                sim800cCmdResult.status = SIM800C_UNEXPECTED_RESPONSE;
+                sim800cCmdResult.foundExpectedResponse = NULL;
+                memset(sim800cCmdResult.rxBuffer, 0, sizeof(sim800cCmdResult.rxBuffer));
+                return &sim800cCmdResult;
+            } else {
+                HAL_Delay(1000);
+                return sendCmd(cmd, expectedResponse, receiveTimeoutInTicks, --numberOfRetries);
+            }
+        }
+        printf(".");
+        HAL_Delay(200);
+		_receiveTimeoutInTicks -= 100;
+    }
+
+    return &sim800cCmdResult;
 }
 
 SIM800CCmdResult* SIM800C::handleResponse(char* cmd, char* expectedResponse, uint16_t receiveTimeoutInTicks, uint8_t numberOfRetries) {
-    char *foundExpectedResponse = strstr((char *)sim800cCmdResult->rxBuffer, expectedResponse);
+    char* foundExpectedResponse = strstr((char *)sim800cCmdResult.rxBuffer, expectedResponse);
     if(foundExpectedResponse) {
-        sim800cCmdResult->status = SIM800C_SUCCESS;
-        sim800cCmdResult->foundExpectedResponse = foundExpectedResponse;
-        return sim800cCmdResult;
+        sim800cCmdResult.status = SIM800C_SUCCESS;
+        sim800cCmdResult.foundExpectedResponse = foundExpectedResponse;
+        return &sim800cCmdResult;
     } else {
         if (numberOfRetries == 0) {
-            sim800cCmdResult->status = SIM800C_UNEXPECTED_RESPONSE;
-            sim800cCmdResult->foundExpectedResponse = NULL;
-            memset(sim800cCmdResult->rxBuffer, 0, sizeof(sim800cCmdResult->rxBuffer));
-            return sim800cCmdResult;
+            sim800cCmdResult.status = SIM800C_UNEXPECTED_RESPONSE;
+            sim800cCmdResult.foundExpectedResponse = NULL;
+            memset(sim800cCmdResult.rxBuffer, 0, sizeof(sim800cCmdResult.rxBuffer));
+            return &sim800cCmdResult;
         } else {
-            HAL_Delay(100);
+            HAL_Delay(1000);
             return sendCmd(cmd, expectedResponse, receiveTimeoutInTicks, --numberOfRetries);
         }
     }

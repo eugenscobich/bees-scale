@@ -133,6 +133,7 @@ void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 2 */
 void changeSim800CPwrPinToOuput() {
+    HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_SET);
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     /*Configure GPIO pins : PAPin PAPin */
     GPIO_InitStruct.Pin = SIM800C_PWR_Pin;
