@@ -19,6 +19,7 @@ uint8_t data[32] = {0};
 
 bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
+bool buttonIsPressed = false;
 uint8_t uart2RxBuffer[1];
 
 void printDeviceInfo();
@@ -27,30 +28,50 @@ void setAlarmDateTime();
 void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromStandby();
+void toggelLed(uint8_t numberOfTimes);
 void error(char* message, uint8_t severityLevel = 5);
+void modemError(char* message, ModemServiceResultStatus modemResultStatus);
+void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, char* message);
 
 int alt_main() {
     HAL_Delay(100);
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
+    sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
+    buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     printDeviceInfo();
+    ModemServiceResultStatus modemResultStatus;
     if (deviceWasWakedUpFromStandby) {
         // TODO handle NRF IRQ, or alarm event
     } else {
         // TODO Check modem and power on if need
         if (deviceIsMaster) {
-            if (modemService.startSIM800CIfNeed() == MODEM_SUCCESS) {
-                printf("SIM800C is started.\r\n");
-                if (modemService.findSMSWithSettingsAndConfigureModem() == MODEM_SUCCESS) {
+            modemResultStatus = modemService.startModemIfNeed();
+            handleModemResultStatus(modemResultStatus, "Wasn't able to start SIM800C module");
 
+            modemResultStatus = modemService.checkModemHealth();
+            handleModemResultStatus(modemResultStatus, "Wasn't able to check modem health");
+            
 
-                } else {
-                    // TODO wait for configuration sms
-                }
-            } else {
-                error("Wasn't able to start SIM800C module");
+            
+            modemService.disablePowerOnPin();
+            
+            modemResultStatus = modemService.configureModem();
+            handleModemResultStatus(modemResultStatus, "Wasn't able to configure modem");
+
+            if (buttonIsPressed) {
+                printf("Button was pressed. Clear all SMS and wait for new settings");
+                // TODO uncomment when it needs
+                //modemResultStatus = modemService.deleteAllSMS();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");   
             }
+            modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+            if (modemResultStatus != MODEM_SUCCESS) {
+                modemError("Wasn't able to find Settings SMS. Wait for settings SMS", modemResultStatus);
+                // TODO wait for SMS
+            }
+
         } else {
             // todo got and wait for nrf channel
         }
@@ -61,7 +82,37 @@ int alt_main() {
     }
 }
 
+void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, char* message) {
+    if (modemResultStatus != MODEM_SUCCESS) {
+        modemError(message, modemResultStatus);
+    }
+}
 
+void toggelLed(uint8_t numberOfTimes) {
+    while (1) {
+        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
+        for (size_t i = 0; i < numberOfTimes + 2; i++) {
+            HAL_Delay(200);
+            HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+        }
+        HAL_Delay(2000);
+    }
+}
+
+void modemError(char* message, ModemServiceResultStatus modemResultStatus) {
+    printf("Error: %s\r\nError Details: ", message);
+    switch (modemResultStatus) {
+        case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
+            printf("Modem didn't repond after power on");
+            toggelLed(4);
+            break;
+        
+        default:
+            toggelLed(3);
+            break;
+    }
+    
+}
 
 void error(char* message, uint8_t severityLevel) {
     printf("Error of severity: %d, Message: %s\r\n", severityLevel, message);
@@ -170,12 +221,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if(huart->Instance == USART1) {
         sim800c.rxCpltCallback();
     }
-    //sim800c.rxCpltCallback();
     if(huart->Instance == USART2) {
-        //HAL_UART_Transmit(&huart2, uart2RxBuffer, 1, 1000);
-        HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
-        HAL_UART_Transmit(&huart1, uart2RxBuffer, 1, 1000);
-        
+        HAL_UART_Transmit(&huart1, uart2RxBuffer, 1, 100);
+        HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);        
     }
 }
 
