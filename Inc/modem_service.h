@@ -41,6 +41,7 @@ public:
     ModemServiceResultStatus configureModem();
     ModemServiceResultStatus findSMSWithSettingsAndConfigureModem();
     ModemServiceResultStatus deleteAllSMS();
+    ModemServiceResultStatus waitForSettingsSMS();
 
     void disablePowerOnPin();
 };

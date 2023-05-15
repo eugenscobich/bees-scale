@@ -65,6 +65,14 @@ int alt_main() {
                 handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");   
             }
             modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+            if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND) {
+                printf("Wasn't able to find Settings SMS. Wait for settings SMS");
+                
+                modemResultStatus = modemService.waitForSettingsSMS();                
+
+
+
+            }
             if (modemResultStatus != MODEM_SUCCESS) {
                 modemError("Wasn't able to find Settings SMS. Wait for settings SMS", modemResultStatus);
                 // TODO wait for SMS
