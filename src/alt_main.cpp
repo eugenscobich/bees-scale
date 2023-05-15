@@ -53,8 +53,6 @@ int alt_main() {
             modemResultStatus = modemService.checkModemHealth();
             handleModemResultStatus(modemResultStatus, "Wasn't able to check modem health");
             
-
-            
             modemService.disablePowerOnPin();
             
             modemResultStatus = modemService.configureModem();

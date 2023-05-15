@@ -115,7 +115,15 @@ void ModemService::disablePowerOnPin() {
 ModemServiceResultStatus ModemService::configureModem() {
     printf("Configure SMS to work in text mode\r\n");
     sim800cResult = sim800c->sendCmd("AT+CMGF=1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
 
+    printf("Decides how newly arrived SMS messages should be handled\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CNMI=1,1,0,0,0", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
 
 
     // TODO can be disable reding the sms
@@ -137,7 +145,6 @@ ModemServiceResultStatus ModemService::configureModem() {
     }
 */
 
-
     return MODEM_SUCCESS;
 }
 
@@ -154,6 +161,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
         printf("Wasn't able to find number of SMSs\r\n");
         return MODEM_ERROR;
     }
+    char* settingsSMSMessage;
     for (size_t i = 1; i < findResult->valueInt + 1; i++) {
         printf("SMS #%d\r\n", i);
         char cmd[10];
@@ -177,15 +185,120 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
             printf("Wasn't able to find SMS #%d message\r\n", i);
             return MODEM_ERROR;
         }
+        char* smsTitle = "Bees Scale Settings\r\n";
+        char* settingsSMSMessage = strstr(findResult->fifthValue, smsTitle);
+        if (settingsSMSMessage) {
+            /*
+            Bees Scale Settings
+            APN="orange.md"
+            USER=""
+            PWD=""
+            API_KEY="sdfjs3k5464n352kl679518i91nl"
+            HOST="google.com"
+            */
+            char* apnPrefix = "APN=\"";
+            char* apnStart = strstr(settingsSMSMessage + strlen(smsTitle), apnPrefix);
+            char* apnEnd = strstr(apnStart + strlen(apnPrefix), "\"");
+            uint8_t apnLength = apnEnd - apnStart;
+            strncpy(apn, apnStart, apnLength > APN_MAX_LENGTH ? APN_MAX_LENGTH : apnLength);
+            printf("Found APN:%s\r\n", apn);
+
+            char* apiKeyPrefix = "API_KEY=\"";
+            char* apiKeyStart = strstr(settingsSMSMessage + strlen(smsTitle), apiKeyPrefix);
+            char* apiKeyEnd = strstr(apiKeyStart + strlen(apiKeyPrefix), "\"");
+            uint8_t apiKeyLength = apiKeyEnd - apiKeyStart;
+            strncpy(apiKey, apiKeyStart, apiKeyLength > API_KEY_MAX_LENGTH ? API_KEY_MAX_LENGTH : apiKeyLength);
+            printf("Found API_KEY:%s\r\n", apiKey);
+
+            char* hostPrefix = "HOST=\"";
+            char* hostStart = strstr(settingsSMSMessage + strlen(smsTitle), hostPrefix);
+            char* hostEnd = strstr(hostStart + strlen(hostPrefix), "\"");
+            uint8_t hostLength = hostEnd - hostStart;
+            strncpy(host, hostStart, hostLength > HOST_MAX_LENGTH ? HOST_MAX_LENGTH : hostLength);
+            printf("Found HOST:%s\r\n", host);
+
+            char* userPrefix = "USER=\"";
+            char* userStart = strstr(settingsSMSMessage + strlen(smsTitle), userPrefix);
+            char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
+            uint8_t userLength = userEnd - userStart;
+            strncpy(user, userStart, userLength > USER_MAX_LENGTH ? USER_MAX_LENGTH : userLength);
+            printf("Found USER:%s\r\n", user);
+
+            char* pwdPrefix = "PWD=\"";
+            char* pwdStart = strstr(settingsSMSMessage + strlen(smsTitle), pwdPrefix);
+            char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
+            uint8_t pwdLength = pwdEnd - pwdStart;
+            strncpy(pwd, pwdStart, pwdLength > PWD_MAX_LENGTH ? PWD_MAX_LENGTH : pwdLength);
+            printf("Found PWD:%s\r\n", pwd);
+        } else {
+            printf("Found SMS is not about settings. It will be deleted!\r\n");
+            char cmd[10];
+            sprintf(cmd, "AT+CMGD=%d", i);
+            sim800cResult = sim800c->sendCmd(cmd, "OK", 5000);
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                printf("Wasn't able to delete SMS with index: %d\r\n", i);
+                return MODEM_ERROR;
+            }
+        }
     }
+    if (settingsSMSMessage == NULL) {
+        printf("Wasn't able to find settigs SMS\r\n");
+        return MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND;
+    } else {
+        printf("Configure modem to be ready for GPRS\r\n");
+        sim800cResult = sim800c->sendCmd("AT+SAPBR=3,1,Contype,\"GPRS\"", "OK");
+        if (sim800cResult->status != SIM800C_SUCCESS) {
+            printf("Wasn't able to set the GPRS connection parameter\r\n");
+            return MODEM_ERROR;
+        }
 
+        printf("Configure APN\r\n");
+        // AT+SAPBR=3,1,APN,"APN"
+        char apnCmd[APN_MAX_LENGTH + 20];
+        sprintf(apnCmd, "AT+SAPBR=3,1,APN,\"%s\"", apn);
+        sim800cResult = sim800c->sendCmd(apnCmd, "OK");
+        if (sim800cResult->status != SIM800C_SUCCESS) {
+            printf("Wasn't able to set the APN parameter\r\n");
+            return MODEM_ERROR;
+        }
 
+        printf("Configure USER\r\n");
+        // AT+SAPBR=3,1,USER,"Username"
+        char userCmd[USER_MAX_LENGTH + 21];
+        sprintf(userCmd, "AT+SAPBR=3,1,USER,\"%s\"", user);
+        sim800cResult = sim800c->sendCmd(userCmd, "OK");
+        if (sim800cResult->status != SIM800C_SUCCESS) {
+            printf("Wasn't able to set the USER parameter\r\n");
+            return MODEM_ERROR;
+        }
+
+        printf("Configure PWD\r\n");
+        // AT+SAPBR=3,1,PWD,"Password"
+        char pwdCmd[PWD_MAX_LENGTH + 20];
+        sprintf(pwdCmd, "AT+SAPBR=3,1,PWD,\"%s\"", pwd);
+        sim800cResult = sim800c->sendCmd(pwdCmd, "OK");
+        if (sim800cResult->status != SIM800C_SUCCESS) {
+            printf("Wasn't able to set the PWD parameter\r\n");
+            return MODEM_ERROR;
+        }
+    }
     return MODEM_SUCCESS;
 }
 
 ModemServiceResultStatus ModemService::deleteAllSMS() {
     printf("Delete All SMS\r\n");
     sim800cResult = sim800c->sendCmd("AT+CMGD=0,4", "OK", 25000);
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+    return MODEM_SUCCESS;
+}
+
+
+
+ModemServiceResultStatus ModemService::waitForSettingsSMS() {
+    printf("Wait for settings SMS\r\n");
+    sim800cResult = sim800c->waitForMessage("AT+CMGD=0,4", "OK", 25000, 10);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
