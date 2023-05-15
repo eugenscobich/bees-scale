@@ -59,14 +59,14 @@ int alt_main() {
             handleModemResultStatus(modemResultStatus, "Wasn't able to configure modem");
 
             if (buttonIsPressed) {
-                printf("Button was pressed. Clear all SMS and wait for new settings");
+                printf("Button was pressed. Clear all SMS and wait for new settings\r\n");
                 // TODO uncomment when it needs
-                //modemResultStatus = modemService.deleteAllSMS();
+                modemResultStatus = modemService.deleteAllSMS();
                 handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");   
             }
             modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
             if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND) {
-                printf("Wasn't able to find Settings SMS. Wait for settings SMS");
+                printf("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
                 
                 modemResultStatus = modemService.waitForSettingsSMS();                
 

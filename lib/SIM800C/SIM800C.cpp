@@ -1,5 +1,5 @@
 #include "SIM800C.h"
-//#include "usart.h"
+#include "usart.h"
 #include <stdio.h>
 #include <cstring>
 
@@ -34,7 +34,7 @@ void SIM800C::rxCpltCallback() {
 
 SIM800CCmdResult* SIM800C::_sendCmd(char *cmd) {
     sim800cCmdResult.cmd = cmd;
-
+    sim800cCmdResult.status = SIM800C_RUNNING;
     rxBufferIndex = 0;
     memset(sim800cCmdResult.rxBuffer, 0, sizeof(sim800cCmdResult.rxBuffer));
 
@@ -55,21 +55,21 @@ SIM800CCmdResult* SIM800C::_sendCmd(char *cmd) {
 
 SIM800CCmdResult* SIM800C::sendCmd(char *cmd) {
     sim800cCmdResult.retryCount = 0;
-    sim800cCmdResult.status = SIM800C_RUNNING;
     return _sendCmd(cmd);
 }
 
 
 SIM800CCmdResult* SIM800C::sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     sim800cCmdResult.retryCount = 0;
-    sim800cCmdResult.status = SIM800C_RUNNING;
     _sendCmd(cmd);
+    sim800cCmdResult.status = SIM800C_RUNNING;
     return _waitForMessage(expectedResponse, receiveTimeout, numberOfRetries);
 }
 
 
 SIM800CCmdResult* SIM800C::_sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     _sendCmd(cmd);
+    sim800cCmdResult.status = SIM800C_RUNNING;
     return _waitForMessage(expectedResponse, receiveTimeout, numberOfRetries);
 }
 
@@ -82,7 +82,7 @@ SIM800CCmdResult* SIM800C::waitForMessage(char *message, uint16_t receiveTimeout
 SIM800CCmdResult* SIM800C::_waitForMessage(char *message, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     uint16_t _receiveTimeout = receiveTimeout;
     while (true) {
-        char* foundMessage = strstr((char *)sim800cCmdResult.rxBuffer, message);
+        char* foundMessage = strstr((char*)sim800cCmdResult.rxBuffer, message);
         if(foundMessage != NULL) {
             sim800cCmdResult.status = SIM800C_SUCCESS;
             char* foundEndLine = strstr(foundMessage + strlen(message), "\r\n");
@@ -95,10 +95,10 @@ SIM800CCmdResult* SIM800C::_waitForMessage(char *message, uint16_t receiveTimeou
         if (_receiveTimeout == 0) {
             if (numberOfRetries == sim800cCmdResult.retryCount) {
                 if (sim800cCmdResult.status == SIM800C_SUCCESS) {
-                    printf("SIM800C RX NO END(%d): %s", sim800cCmdResult.retryCount, (char *)sim800cCmdResult.rxBuffer);
+                    printf("SIM800C RX NO END(%d): %s", sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
                 } else {
                     sim800cCmdResult.status = SIM800C_TIMEOUT;
-                    printf("SIM800C RX TIMEOUT(%d): %s", sim800cCmdResult.retryCount, (char *)sim800cCmdResult.rxBuffer);
+                    printf("SIM800C RX TIMEOUT(%d): %s\r\n", sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
                 }
                 return &sim800cCmdResult;
             } else {

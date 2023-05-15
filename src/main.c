@@ -174,6 +174,15 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 PUTCHAR_PROTOTYPE {
+  /*
+  if (ch == '\r') {
+    HAL_UART_Transmit(&huart2, (uint8_t *)"$", 1, HAL_MAX_DELAY);
+  } else if (ch == '\n') {
+    HAL_UART_Transmit(&huart2, (uint8_t *)"@", 1, HAL_MAX_DELAY);
+  } else {
+    HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+  }
+  */
   HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
