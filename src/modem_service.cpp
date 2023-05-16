@@ -8,6 +8,16 @@ ModemService::ModemService(SIM800C* _sim800c, void(*_updateFunction)()) :
 
 }
 
+void ModemService::_nonBlockingDelay(uint32_t delayInTicks) {
+    startDelayTick = HAL_GetTick();
+    while (true) {
+        if (startDelayTick + delayInTicks < HAL_GetTick()) {
+            return;
+        }
+        updateFunction();
+    }
+}
+
 bool ModemService::isSIM800CPresent() {
     GPIO_PinState pinState = HAL_GPIO_ReadPin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin);
     return pinState == GPIO_PIN_SET;
@@ -22,9 +32,9 @@ ModemServiceResultStatus ModemService::startModemIfNeed() {
         return MODEM_SUCCESS;
     } else {
         printf("Modem didn't respond. Power On!\r\n");
-        HAL_Delay(2000);
+        _nonBlockingDelay(2000);
         HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_RESET);
-        HAL_Delay(4000);
+        _nonBlockingDelay(4000);
         printf("Check if Modem repond at AT command\r\n");
         sim800cResult = sim800c->sendCmd("AT", "OK", 2000, 2);
         if (sim800cResult->status != SIM800C_SUCCESS) {
@@ -191,7 +201,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
             return MODEM_ERROR;
         }
 
-        char* smsTitle = "Bees Scale Settings";
+        const char* smsTitle = "Bees Scale Settings";
         settingsSMSMessage = strstr(findResult->fifthValue, smsTitle);
         if (settingsSMSMessage) {
             /*
@@ -202,37 +212,37 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
             API_KEY="sdfjs3k5464n352kl679518i91nl"
             HOST="google.com"
             */
-            char* apnPrefix = "APN=\"";
-            char* apnStart = strstr(settingsSMSMessage + strlen(smsTitle), apnPrefix);
-            char* apnEnd = strstr(apnStart + strlen(apnPrefix), "\"");
+            const char* apnPrefix = "APN=\"";
+            const char* apnStart = strstr(settingsSMSMessage + strlen(smsTitle), apnPrefix);
+            const char* apnEnd = strstr(apnStart + strlen(apnPrefix), "\"");
             uint8_t apnLength = apnEnd - (apnStart + strlen(apnPrefix));
             strncpy(apn, apnStart + strlen(apnPrefix), apnLength > APN_MAX_LENGTH ? APN_MAX_LENGTH : apnLength);
             printf("Found APN:%s\r\n", apn);
 
-            char* apiKeyPrefix = "API_KEY=\"";
-            char* apiKeyStart = strstr(settingsSMSMessage + strlen(smsTitle), apiKeyPrefix);
-            char* apiKeyEnd = strstr(apiKeyStart + strlen(apiKeyPrefix), "\"");
+            const char* apiKeyPrefix = "API_KEY=\"";
+            const char* apiKeyStart = strstr(settingsSMSMessage + strlen(smsTitle), apiKeyPrefix);
+            const char* apiKeyEnd = strstr(apiKeyStart + strlen(apiKeyPrefix), "\"");
             uint8_t apiKeyLength = apiKeyEnd - (apiKeyStart + strlen(apiKeyPrefix));
             strncpy(apiKey, apiKeyStart + strlen(apiKeyPrefix), apiKeyLength > API_KEY_MAX_LENGTH ? API_KEY_MAX_LENGTH : apiKeyLength);
             printf("Found API_KEY:%s\r\n", apiKey);
 
-            char* hostPrefix = "HOST=\"";
-            char* hostStart = strstr(settingsSMSMessage + strlen(smsTitle), hostPrefix);
-            char* hostEnd = strstr(hostStart + strlen(hostPrefix), "\"");
+            const char* hostPrefix = "HOST=\"";
+            const char* hostStart = strstr(settingsSMSMessage + strlen(smsTitle), hostPrefix);
+            const char* hostEnd = strstr(hostStart + strlen(hostPrefix), "\"");
             uint8_t hostLength = hostEnd - (hostStart + strlen(hostPrefix));
             strncpy(host, hostStart + strlen(hostPrefix), hostLength > HOST_MAX_LENGTH ? HOST_MAX_LENGTH : hostLength);
             printf("Found HOST:%s\r\n", host);
 
-            char* userPrefix = "USER=\"";
-            char* userStart = strstr(settingsSMSMessage + strlen(smsTitle), userPrefix);
-            char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
+            const char* userPrefix = "USER=\"";
+            const char* userStart = strstr(settingsSMSMessage + strlen(smsTitle), userPrefix);
+            const char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
             uint8_t userLength = userEnd - (userStart + strlen(userPrefix));
             strncpy(user, userStart + strlen(userPrefix), userLength > USER_MAX_LENGTH ? USER_MAX_LENGTH : userLength);
             printf("Found USER:%s\r\n", user);
 
-            char* pwdPrefix = "PWD=\"";
-            char* pwdStart = strstr(settingsSMSMessage + strlen(smsTitle), pwdPrefix);
-            char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
+            const char* pwdPrefix = "PWD=\"";
+            const char* pwdStart = strstr(settingsSMSMessage + strlen(smsTitle), pwdPrefix);
+            const char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
             uint8_t pwdLength = pwdEnd - (pwdStart + strlen(pwdPrefix));
             strncpy(pwd, pwdStart + strlen(pwdPrefix), pwdLength > PWD_MAX_LENGTH ? PWD_MAX_LENGTH : pwdLength);
             printf("Found PWD:%s\r\n", pwd);
@@ -311,18 +321,14 @@ ModemServiceResultStatus ModemService::waitForSettingsSMS() {
     if (sim800cResult->status == SIM800C_SUCCESS) {
         ModemServiceResultStatus modemServiceResultStatus = findSMSWithSettingsAndConfigureModem();
         if (modemServiceResultStatus == MODEM_SUCCESS) {
-            for (size_t i = 0; i < 5; i++) {
-                HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-                HAL_Delay(50);
-            }
             return MODEM_SUCCESS;
         } else {
             printf("Received SMS doesn't conatins settings\r\n");
-            return MODEM_ERROR;
+            return MODEM_ERROR_RECEIVED_SMS_DOESN_T_CONTAINS_SETTINGS;
         }
     } else if (sim800cResult->status == SIM800C_TIMEOUT) {
         printf("SMS is not received\r\n");
-        return MODEM_ERROR;
+        return MODEM_ERROR_SMS_RECEIVED_TIMEOUT;
     }
     return MODEM_ERROR;
 }

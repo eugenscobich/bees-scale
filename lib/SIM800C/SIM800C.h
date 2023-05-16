@@ -69,6 +69,8 @@ private:
     volatile bool txComplete = false;
     volatile bool rxComplete = false;
     
+    uint32_t startDelayTick;
+    
     uint16_t rxBufferSize = RX_BUFFER_SIZE;
     uint8_t rxBuffer[1] = { 0 };
     uint16_t rxBufferIndex = 0;
@@ -79,7 +81,10 @@ private:
     uint32_t _charArray2int (const char *array, uint8_t n);
 
 public:
+
     SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin, void(*updateFunction)());
+    
+    void _nonBlockingDelay(uint32_t delayInTicks);
     void init();
     void rxCpltCallback();
     void txCpltCallback();

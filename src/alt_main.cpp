@@ -7,11 +7,15 @@
 #include "NRF24L01p.h"
 #include "SIM800C.h"
 #include "modem_service.h"
+#include "led_service.h"
 #include <stdio.h>
+
 void update();
+
 NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
 SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin, &update);
 ModemService modemService(&sim800c, &update);
+LedService ledService;
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
@@ -21,20 +25,19 @@ bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
 bool buttonIsPressed = false;
 uint8_t uart2RxBuffer[1];
+uint32_t startDelayTick;
 
+void nonBlockingDelay(uint32_t delayInTicks);
 void printDeviceInfo();
 void setLocalDateTime();
 void setAlarmDateTime();
 void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromStandby();
-void toggelLed(uint8_t numberOfTimes);
-void error(const char* message, uint8_t severityLevel = 5);
-void modemError(const char* message, ModemServiceResultStatus modemResultStatus);
 void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char* message);
 
 int alt_main() {
-    HAL_Delay(100);
+    nonBlockingDelay(100);
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
     sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
@@ -47,34 +50,45 @@ int alt_main() {
     } else {
         // TODO Check modem and power on if need
         if (deviceIsMaster) {
+            ledService.blinkGreenLed(0, 200);
             modemResultStatus = modemService.startModemIfNeed();
             handleModemResultStatus(modemResultStatus, "Wasn't able to start SIM800C module");
 
-            modemResultStatus = modemService.checkModemHealth();
-            handleModemResultStatus(modemResultStatus, "Wasn't able to check modem health");
+            if (modemResultStatus == MODEM_SUCCESS) {
+                modemResultStatus = modemService.checkModemHealth();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to check modem health");
+            }
             
             modemService.disablePowerOnPin();
             
-            modemResultStatus = modemService.configureModem();
-            handleModemResultStatus(modemResultStatus, "Wasn't able to configure modem");
-
-            if (buttonIsPressed) {
-                printf("Button was pressed. Clear all SMS and wait for new settings\r\n");
-                // TODO uncomment when it needs
-                modemResultStatus = modemService.deleteAllSMS();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");   
+            if (modemResultStatus == MODEM_SUCCESS) {
+                modemResultStatus = modemService.configureModem();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to configure modem");
             }
-            modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+            
+            if (modemResultStatus == MODEM_SUCCESS) {
+                if (buttonIsPressed) {
+                    printf("Button was pressed. Clear all SMS and wait for new settings\r\n");
+                    // TODO uncomment when it needs
+                    modemResultStatus = modemService.deleteAllSMS();
+                    handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");   
+                }
+            }
+
+            if (modemResultStatus == MODEM_SUCCESS) {
+                modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+            }
+
             if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND) {
                 printf("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
-                
-                modemResultStatus = modemService.waitForSettingsSMS();                
-
-
-
+                ledService.blinkGreenLed(0, 500);
+                modemResultStatus = modemService.waitForSettingsSMS();
+                ledService.stopBlinkGreenLed();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to receive settings SMS");
             }
+
             if (modemResultStatus != MODEM_SUCCESS) {
-                modemError("Wasn't able to find Settings SMS. Wait for settings SMS", modemResultStatus);
+                printf("Wasn't able to find Settings SMS. Wait for settings SMS");
                 // TODO wait for SMS
             }
 
@@ -84,56 +98,46 @@ int alt_main() {
     }
 
     while(1) {
-        error("Infenite while must not happen", 2);
+        update();
+    }
+}
+
+void nonBlockingDelay(uint32_t delayInTicks) {
+    startDelayTick = HAL_GetTick();
+    while (true) {
+        if (startDelayTick + delayInTicks < HAL_GetTick()) {
+            return;
+        }
+        update();
     }
 }
 
 void update() {
-
+    ledService.update();
 }
 
 void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char* message) {
     if (modemResultStatus != MODEM_SUCCESS) {
-        modemError(message, modemResultStatus);
-    }
-}
-
-void toggelLed(uint8_t numberOfTimes) {
-    while (1) {
-        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
-        for (uint8_t i = 0; i < numberOfTimes + 2; i++) {
-            HAL_Delay(200);
-            HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+        printf("Error: %s\r\n", message);
+        switch (modemResultStatus) {
+            case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
+                ledService.blinkGreenLed(2);
+                break;
+            case MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND:
+                ledService.blinkGreenLed(3);
+                break;
+            case MODEM_ERROR_RECEIVED_SMS_DOESN_T_CONTAINS_SETTINGS:
+                ledService.blinkGreenLed(4);
+                break;
+            case MODEM_ERROR_SMS_RECEIVED_TIMEOUT:
+                ledService.blinkGreenLed(5);
+                break;
+            default:
+                ledService.blinkGreenLed(1);
+                break;
         }
-        HAL_Delay(2000);
     }
 }
-
-void modemError(const char* message, ModemServiceResultStatus modemResultStatus) {
-    printf("Error: %s\r\nError Details: ", message);
-    switch (modemResultStatus) {
-        case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
-            printf("Modem didn't repond after power on");
-            toggelLed(4);
-            break;
-        
-        default:
-            toggelLed(3);
-            break;
-    }
-    
-}
-
-void error(const char* message, uint8_t severityLevel) {
-    printf("Error of severity: %d, Message: %s\r\n", severityLevel, message);
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
-    while (1) {
-        HAL_Delay(100 * severityLevel);
-        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-    }
-}
-
-
 
 
 /*
