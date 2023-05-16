@@ -3,12 +3,13 @@
 #include <stdio.h>
 #include <cstring>
 
-SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin):
+SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin, void(*_updateFunction)()):
     huart(_huart),
     SIM800C_PWR_GPIOx(_SIM800C_PWR_GPIOx),
     SIM800C_PWR_GPIO_Pin(_SIM800C_PWR_GPIO_Pin),
     SIM800C_DTR_GPIOx(_SIM800C_DTR_GPIOx),
-    SIM800C_DTR_GPIO_Pin(_SIM800C_DTR_GPIO_Pin)
+    SIM800C_DTR_GPIO_Pin(_SIM800C_DTR_GPIO_Pin),
+    updateFunction(_updateFunction)
 {
     sim800cCmdResult = {0};
 }
@@ -32,7 +33,7 @@ void SIM800C::rxCpltCallback() {
     HAL_UART_Receive_IT(huart, rxBuffer, 1);
 }
 
-SIM800CCmdResult* SIM800C::_sendCmd(char *cmd) {
+SIM800CCmdResult* SIM800C::_sendCmd(const char *cmd) {
     sim800cCmdResult.cmd = cmd;
     sim800cCmdResult.status = SIM800C_RUNNING;
     rxBufferIndex = 0;
@@ -53,13 +54,13 @@ SIM800CCmdResult* SIM800C::_sendCmd(char *cmd) {
     return &sim800cCmdResult;
 }
 
-SIM800CCmdResult* SIM800C::sendCmd(char *cmd) {
+SIM800CCmdResult* SIM800C::sendCmd(const char *cmd) {
     sim800cCmdResult.retryCount = 0;
     return _sendCmd(cmd);
 }
 
 
-SIM800CCmdResult* SIM800C::sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
+SIM800CCmdResult* SIM800C::sendCmd(const char *cmd, const char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     sim800cCmdResult.retryCount = 0;
     _sendCmd(cmd);
     sim800cCmdResult.status = SIM800C_RUNNING;
@@ -67,19 +68,19 @@ SIM800CCmdResult* SIM800C::sendCmd(char *cmd, char *expectedResponse, uint16_t r
 }
 
 
-SIM800CCmdResult* SIM800C::_sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
+SIM800CCmdResult* SIM800C::_sendCmd(const char *cmd, const char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     _sendCmd(cmd);
     sim800cCmdResult.status = SIM800C_RUNNING;
     return _waitForMessage(expectedResponse, receiveTimeout, numberOfRetries);
 }
 
-SIM800CCmdResult* SIM800C::waitForMessage(char *message, uint16_t receiveTimeout) {
+SIM800CCmdResult* SIM800C::waitForMessage(const char *message, uint16_t receiveTimeout) {
     rxBufferIndex = 0;
     memset(sim800cCmdResult.rxBuffer, 0, sizeof(sim800cCmdResult.rxBuffer));
     return _waitForMessage(message, receiveTimeout, 0);
 }
 
-SIM800CCmdResult* SIM800C::_waitForMessage(char *message, uint16_t receiveTimeout, uint8_t numberOfRetries) {
+SIM800CCmdResult* SIM800C::_waitForMessage(const char *message, uint16_t receiveTimeout, uint8_t numberOfRetries) {
     uint16_t _receiveTimeout = receiveTimeout;
     while (true) {
         char* foundMessage = strstr((char*)sim800cCmdResult.rxBuffer, message);
@@ -115,7 +116,7 @@ SIM800CCmdResult* SIM800C::_waitForMessage(char *message, uint16_t receiveTimeou
 }
 
 
-SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(char* from, char* to, char* secondTo, char* thirdTo, char* forthTo, char* fifthTo, char* sixthTo) {
+SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(const char* from, const char* to, const char* secondTo, const char* thirdTo, const char* forthTo, const char* fifthTo, const char* sixthTo) {
     sim800cFindInRxBufferResult.found = false;
     sim800cFindInRxBufferResult.value = NULL;
     sim800cFindInRxBufferResult.length = 0;
@@ -202,7 +203,7 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(char* from, char* to, char*
     return &sim800cFindInRxBufferResult;
 }
 
-SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(char* from, char* to, char* secondTo, char* thirdTo) {
+SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo, const char* thirdTo) {
     findInRxBuffer(from, to, secondTo, thirdTo);
     sim800cFindInRxBufferResult.valueInt = 0;
     sim800cFindInRxBufferResult.secondValueInt = 0;
@@ -219,7 +220,7 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(char* from, ch
     return &sim800cFindInRxBufferResult;
 }
 
-uint32_t SIM800C::_charArray2int (char* array, uint8_t length) {    
+uint32_t SIM800C::_charArray2int (const char* array, uint8_t length) {    
     uint32_t number = 0;
     uint32_t mult = 1;
     for (uint8_t i = length; i > 0; i--) {

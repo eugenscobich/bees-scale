@@ -1,8 +1,11 @@
 #include "modem_service.h"
 #include <cstring>
 
-ModemService::ModemService(SIM800C* _sim800c) :
-    sim800c(_sim800c) {
+ModemService::ModemService(SIM800C* _sim800c, void(*_updateFunction)()) :
+    sim800c(_sim800c),
+    updateFunction(_updateFunction)
+{
+
 }
 
 bool ModemService::isSIM800CPresent() {

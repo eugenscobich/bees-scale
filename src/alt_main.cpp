@@ -8,10 +8,10 @@
 #include "SIM800C.h"
 #include "modem_service.h"
 #include <stdio.h>
-
+void update();
 NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
-SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin);
-ModemService modemService(&sim800c);
+SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin, &update);
+ModemService modemService(&sim800c, &update);
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
@@ -29,9 +29,9 @@ void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromStandby();
 void toggelLed(uint8_t numberOfTimes);
-void error(char* message, uint8_t severityLevel = 5);
-void modemError(char* message, ModemServiceResultStatus modemResultStatus);
-void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, char* message);
+void error(const char* message, uint8_t severityLevel = 5);
+void modemError(const char* message, ModemServiceResultStatus modemResultStatus);
+void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char* message);
 
 int alt_main() {
     HAL_Delay(100);
@@ -88,7 +88,11 @@ int alt_main() {
     }
 }
 
-void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, char* message) {
+void update() {
+
+}
+
+void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char* message) {
     if (modemResultStatus != MODEM_SUCCESS) {
         modemError(message, modemResultStatus);
     }
@@ -97,7 +101,7 @@ void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, char* m
 void toggelLed(uint8_t numberOfTimes) {
     while (1) {
         HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
-        for (size_t i = 0; i < numberOfTimes + 2; i++) {
+        for (uint8_t i = 0; i < numberOfTimes + 2; i++) {
             HAL_Delay(200);
             HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
         }
@@ -105,7 +109,7 @@ void toggelLed(uint8_t numberOfTimes) {
     }
 }
 
-void modemError(char* message, ModemServiceResultStatus modemResultStatus) {
+void modemError(const char* message, ModemServiceResultStatus modemResultStatus) {
     printf("Error: %s\r\nError Details: ", message);
     switch (modemResultStatus) {
         case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
@@ -120,7 +124,7 @@ void modemError(char* message, ModemServiceResultStatus modemResultStatus) {
     
 }
 
-void error(char* message, uint8_t severityLevel) {
+void error(const char* message, uint8_t severityLevel) {
     printf("Error of severity: %d, Message: %s\r\n", severityLevel, message);
     HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
     while (1) {

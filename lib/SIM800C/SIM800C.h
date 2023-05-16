@@ -18,7 +18,7 @@ typedef enum {
 } SIM800CCmdResultStatus;
 
 typedef struct {
-    char* cmd;
+    const char* cmd;
     SIM800CCmdResultStatus status;
     uint8_t retryCount;
     uint8_t rxBuffer[RX_BUFFER_SIZE];
@@ -59,6 +59,8 @@ private:
     GPIO_TypeDef* SIM800C_DTR_GPIOx;
     uint16_t SIM800C_DTR_GPIO_Pin;
 
+    void(*updateFunction)();
+
     SIM800CCmdResult sim800cCmdResult;
     SIM800CFindInRxBufferResult sim800cFindInRxBufferResult;
 
@@ -71,22 +73,22 @@ private:
     uint8_t rxBuffer[1] = { 0 };
     uint16_t rxBufferIndex = 0;
 
-    SIM800CCmdResult* _waitForMessage(char *message, uint16_t waitTimeout, uint8_t numberOfRetries);
-    SIM800CCmdResult* _sendCmd(char *cmd);
-    SIM800CCmdResult* _sendCmd(char *cmd, char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries);
-    uint32_t _charArray2int (char *array, uint8_t n);
+    SIM800CCmdResult* _waitForMessage(const char *message, uint16_t waitTimeout, uint8_t numberOfRetries);
+    SIM800CCmdResult* _sendCmd(const char *cmd);
+    SIM800CCmdResult* _sendCmd(const char *cmd, const char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries);
+    uint32_t _charArray2int (const char *array, uint8_t n);
 
 public:
-    SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin);
+    SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin, void(*updateFunction)());
     void init();
     void rxCpltCallback();
     void txCpltCallback();
-    SIM800CCmdResult* sendCmd(char *cmd);
-    SIM800CCmdResult* sendCmd(char* cmd, char* expectedResponse, uint16_t receiveTimeout = 1000, uint8_t numberOfRetries = 0);
-    SIM800CCmdResult* waitForMessage(char *message, uint16_t waitTimeout);
+    SIM800CCmdResult* sendCmd(const char *cmd);
+    SIM800CCmdResult* sendCmd(const char* cmd, const char* expectedResponse, uint16_t receiveTimeout = 1000, uint8_t numberOfRetries = 0);
+    SIM800CCmdResult* waitForMessage(const char *message, uint16_t waitTimeout);
 
-    SIM800CFindInRxBufferResult* findInRxBuffer(char* from, char* to, char* secondTo = NULL, char* thirdTo = NULL, char* forthTo = NULL, char* fifthTo = NULL, char* sixthTo = NULL);
-    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(char* from, char* to, char* secondTo = NULL, char* thirdTo = NULL);
+    SIM800CFindInRxBufferResult* findInRxBuffer(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL);
+    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL);
 };
 
 #endif // __SIM800C_H__

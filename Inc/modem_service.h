@@ -22,6 +22,8 @@ class ModemService {
 
 private:
     SIM800C* sim800c;
+    void(*updateFunction)();
+
     SIM800CCmdResult* sim800cResult;
 
     uint8_t signalQuality = 0;
@@ -34,7 +36,7 @@ private:
     char host[HOST_MAX_LENGTH + 1];
     
 public:
-    ModemService(SIM800C* _sim800c);
+    ModemService(SIM800C* _sim800c, void(*updateFunction)());
     bool isSIM800CPresent();
     ModemServiceResultStatus startModemIfNeed();
     ModemServiceResultStatus checkModemHealth();
