@@ -87,6 +87,10 @@ int alt_main() {
                 handleModemResultStatus(modemResultStatus, "Wasn't able to receive settings SMS");
             }
 
+            if (modemResultStatus == MODEM_SUCCESS) {
+                modemResultStatus = modemService.configureDateAndTime();
+            }
+
             if (modemResultStatus != MODEM_SUCCESS) {
                 printf("Wasn't able to find Settings SMS. Wait for settings SMS");
                 // TODO wait for SMS

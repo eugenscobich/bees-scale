@@ -61,7 +61,7 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
         return MODEM_ERROR;
     }
     printf("Read SIM information to confirm whether the SIM is plugged.\r\n");
-    sim800cResult = sim800c->sendCmd("AT+CCID", "OK");
+    sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 10000);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
@@ -120,7 +120,9 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
     return MODEM_SUCCESS;
 }
 
-
+void ModemService::enablePowerOnPin() {
+    HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_RESET);
+}
 
 void ModemService::disablePowerOnPin() {
     HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_SET);
@@ -138,7 +140,43 @@ ModemServiceResultStatus ModemService::configureModem() {
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
+/*
+    printf("Configure Date and Time\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CLTS?", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+    uint8_t isRTCSyncEnabled;
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CLTS: ", "\r\n");
+    if (findResult->found) {
+        isRTCSyncEnabled = (uint8_t)findResult->valueInt;
+        printf("RTC Sync Enabled: %d\r\n", isRTCSyncEnabled);
+        if (isRTCSyncEnabled == 0) {
+            printf("Set Date and Time syncronisation\r\n");
+            sim800cResult = sim800c->sendCmd("AT+CLTS=1", "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                return MODEM_ERROR;
+            }
 
+            sim800cResult = sim800c->sendCmd("AT+W", "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                return MODEM_ERROR;
+            }
+
+            enablePowerOnPin();
+            _nonBlockingDelay(10000);
+            HAL_NVIC_SystemReset();
+        } else {
+            sim800cResult = sim800c->sendCmd("AT+CCLK?", "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                return MODEM_ERROR;
+            }
+        }
+    } else {
+        printf("Wasn't able to find if RTC is enabled or not in modem\r\n");
+        return MODEM_ERROR;
+    }
+*/
 
     // TODO can be disable reding the sms
 /*
@@ -235,17 +273,21 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
 
             const char* userPrefix = "USER=\"";
             const char* userStart = strstr(settingsSMSMessage + strlen(smsTitle), userPrefix);
-            const char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
-            uint8_t userLength = userEnd - (userStart + strlen(userPrefix));
-            strncpy(user, userStart + strlen(userPrefix), userLength > USER_MAX_LENGTH ? USER_MAX_LENGTH : userLength);
-            printf("Found USER:%s\r\n", user);
+            if (userStart) {
+                const char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
+                uint8_t userLength = userEnd - (userStart + strlen(userPrefix));
+                strncpy(user, userStart + strlen(userPrefix), userLength > USER_MAX_LENGTH ? USER_MAX_LENGTH : userLength);
+                printf("Found USER:%s\r\n", user);
+            }
 
             const char* pwdPrefix = "PWD=\"";
             const char* pwdStart = strstr(settingsSMSMessage + strlen(smsTitle), pwdPrefix);
-            const char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
-            uint8_t pwdLength = pwdEnd - (pwdStart + strlen(pwdPrefix));
-            strncpy(pwd, pwdStart + strlen(pwdPrefix), pwdLength > PWD_MAX_LENGTH ? PWD_MAX_LENGTH : pwdLength);
-            printf("Found PWD:%s\r\n", pwd);
+            if (pwdStart) {
+                const char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
+                uint8_t pwdLength = pwdEnd - (pwdStart + strlen(pwdPrefix));
+                strncpy(pwd, pwdStart + strlen(pwdPrefix), pwdLength > PWD_MAX_LENGTH ? PWD_MAX_LENGTH : pwdLength);
+                printf("Found PWD:%s\r\n", pwd);
+            }
             break;
         } else {
             printf("Found SMS is not about settings. It will be deleted!\r\n");
@@ -261,7 +303,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
 
     if (settingsSMSMessage) {
         printf("Configure modem to be ready for GPRS\r\n");
-        sim800cResult = sim800c->sendCmd("AT+SAPBR=3,1,Contype,\"GPRS\"", "OK");
+        sim800cResult = sim800c->sendCmd("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
             printf("Wasn't able to set the GPRS connection parameter\r\n");
             return MODEM_ERROR;
@@ -270,31 +312,47 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
         printf("Configure APN\r\n");
         // AT+SAPBR=3,1,APN,"APN"
         char apnCmd[APN_MAX_LENGTH + 20];
-        sprintf(apnCmd, "AT+SAPBR=3,1,APN,\"%s\"", apn);
+        sprintf(apnCmd, "AT+SAPBR=3,1,\"APN\",\"%s\"", apn);
         sim800cResult = sim800c->sendCmd(apnCmd, "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
             printf("Wasn't able to set the APN parameter\r\n");
             return MODEM_ERROR;
         }
 
-        printf("Configure USER\r\n");
-        // AT+SAPBR=3,1,USER,"Username"
-        char userCmd[USER_MAX_LENGTH + 21];
-        sprintf(userCmd, "AT+SAPBR=3,1,USER,\"%s\"", user);
-        sim800cResult = sim800c->sendCmd(userCmd, "OK");
+/*
+        sim800cResult = sim800c->sendCmd("AT+CGATT?", "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
-            printf("Wasn't able to set the USER parameter\r\n");
             return MODEM_ERROR;
         }
 
-        printf("Configure PWD\r\n");
-        // AT+SAPBR=3,1,PWD,"Password"
-        char pwdCmd[PWD_MAX_LENGTH + 20];
-        sprintf(pwdCmd, "AT+SAPBR=3,1,PWD,\"%s\"", pwd);
-        sim800cResult = sim800c->sendCmd(pwdCmd, "OK");
+        
+        sim800cResult = sim800c->sendCmd("AT+CSTT=\"www\"", "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
-            printf("Wasn't able to set the PWD parameter\r\n");
             return MODEM_ERROR;
+        }
+*/
+        if (user[0] != '\0') {
+            printf("Configure USER\r\n");
+            // AT+SAPBR=3,1,USER,"Username"
+            char userCmd[USER_MAX_LENGTH + 21];
+            sprintf(userCmd, "AT+SAPBR=3,1,\"USER\",\"%s\"", user);
+            sim800cResult = sim800c->sendCmd(userCmd, "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                printf("Wasn't able to set the USER parameter\r\n");
+                return MODEM_ERROR;
+            }
+        }
+
+        if (pwd[0] != '\0') {
+            printf("Configure PWD\r\n");
+            // AT+SAPBR=3,1,PWD,"Password"
+            char pwdCmd[PWD_MAX_LENGTH + 20];
+            sprintf(pwdCmd, "AT+SAPBR=3,1,\"PWD\",\"%s\"", pwd);
+            sim800cResult = sim800c->sendCmd(pwdCmd, "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                printf("Wasn't able to set the PWD parameter\r\n");
+                return MODEM_ERROR;
+            }
         }
     } else {
         printf("Wasn't able to find settings SMS\r\n");
@@ -331,4 +389,59 @@ ModemServiceResultStatus ModemService::waitForSettingsSMS() {
         return MODEM_ERROR_SMS_RECEIVED_TIMEOUT;
     }
     return MODEM_ERROR;
+}
+
+
+ModemServiceResultStatus ModemService::configureDateAndTime() {
+    printf("Open GPRS context\r\n");
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=2,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=1,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    printf("Set NTP Use bear profile 1\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CNTPCID=1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    printf("Set NTP service url and local time zone\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CNTP=\"time1.google.com\",0", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    printf("Start sync network time\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CNTP", "+CNTP: ", 10000);
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CNTP: ", "\r\n");
+    if (findResult->found) {
+        if ((uint8_t)findResult->valueInt == 1) {
+            printf("Network time syncronisation is successful\r\n");
+            sim800cResult = sim800c->sendCmd("AT+CCLK?", "OK");
+            if (sim800cResult->status != SIM800C_SUCCESS) {
+                return MODEM_ERROR;
+            }
+        } else {
+            printf("Network time syncronisation is unsuccessful\r\n");
+            return MODEM_ERROR;
+        }
+    } else {
+        printf("Wasn't able to find if RTC sync status\r\n");
+        return MODEM_ERROR;
+    }
 }

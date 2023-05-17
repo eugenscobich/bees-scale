@@ -47,8 +47,10 @@ public:
     ModemServiceResultStatus findSMSWithSettingsAndConfigureModem();
     ModemServiceResultStatus deleteAllSMS();
     ModemServiceResultStatus waitForSettingsSMS();
+    ModemServiceResultStatus configureDateAndTime();
 
     void disablePowerOnPin();
+    void enablePowerOnPin();
 };
 
 #endif /* __MODEM_SERVICE_H__ */
