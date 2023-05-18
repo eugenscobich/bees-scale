@@ -26,26 +26,13 @@ typedef struct {
 
 typedef struct {
     bool found;
-    bool secondFound;
-    bool thirdFound;
-    bool forthFound;
-    bool fifthFound;
-    bool sixthFound;
     char* value;
-    char* secondValue;
-    char* thirdValue;
-    char* forthValue;
-    char* fifthValue;
-    char* sixthValue;
     uint32_t valueInt;
-    uint32_t secondValueInt;
-    uint32_t thirdValueInt;
     uint8_t length;
-    uint8_t secondLength;
-    uint8_t thirdLength;
-    uint8_t forthLength;
-    uint8_t fifthLength;
-    uint8_t sixthLength;
+} SIM800CFindInRxBufferSingleResult;
+
+typedef struct {
+    SIM800CFindInRxBufferSingleResult result[7];
 } SIM800CFindInRxBufferResult;
 
 class SIM800C {
@@ -92,8 +79,8 @@ public:
     SIM800CCmdResult* sendCmd(const char* cmd, const char* expectedResponse, uint16_t receiveTimeout = 1000, uint8_t numberOfRetries = 0);
     SIM800CCmdResult* waitForMessage(const char *message, uint16_t waitTimeout);
 
-    SIM800CFindInRxBufferResult* findInRxBuffer(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL);
-    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL);
+    SIM800CFindInRxBufferResult* findInRxBuffer(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL, const char* seventhTo = NULL);
+    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL, const char* seventhTo = NULL);
 };
 
 #endif // __SIM800C_H__

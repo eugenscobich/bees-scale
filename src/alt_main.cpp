@@ -89,7 +89,9 @@ int alt_main() {
 
             if (modemResultStatus == MODEM_SUCCESS) {
                 modemResultStatus = modemService.configureDateAndTime();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to start GPRS");   
             }
+            
 
             if (modemResultStatus != MODEM_SUCCESS) {
                 printf("Wasn't able to find Settings SMS. Wait for settings SMS");
@@ -135,6 +137,9 @@ void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const c
                 break;
             case MODEM_ERROR_SMS_RECEIVED_TIMEOUT:
                 ledService.blinkGreenLed(5);
+                break;
+            case MODEM_ERROR_COULD_NOT_START_GPRS:
+                ledService.blinkGreenLed(6);
                 break;
             default:
                 ledService.blinkGreenLed(1);

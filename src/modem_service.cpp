@@ -396,9 +396,6 @@ ModemServiceResultStatus ModemService::configureDateAndTime() {
     printf("Open GPRS context\r\n");
 
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
-    if (sim800cResult->status != SIM800C_SUCCESS) {
-        return MODEM_ERROR;
-    }
 
     sim800cResult = sim800c->sendCmd("AT+SAPBR=2,1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
@@ -423,25 +420,32 @@ ModemServiceResultStatus ModemService::configureDateAndTime() {
     }
 
     printf("Start sync network time\r\n");
-    sim800cResult = sim800c->sendCmd("AT+CNTP", "+CNTP: ", 10000);
+    sim800cResult = sim800c->sendCmd("AT+CNTP", "+CNTP: 1", 10000, 2);
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        printf("Network time syncronisation is unsuccessful\r\n");
+        return MODEM_ERROR;
+    }
+
+    printf("Network time syncronisation is successful\r\n");
+    sim800cResult = sim800c->sendCmd("AT+CCLK?", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
 
-    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CNTP: ", "\r\n");
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CCLK: \"", "/", "/", ",", ":", ":", "+", "\"");
     if (findResult->found) {
-        if ((uint8_t)findResult->valueInt == 1) {
-            printf("Network time syncronisation is successful\r\n");
-            sim800cResult = sim800c->sendCmd("AT+CCLK?", "OK");
-            if (sim800cResult->status != SIM800C_SUCCESS) {
-                return MODEM_ERROR;
-            }
-        } else {
-            printf("Network time syncronisation is unsuccessful\r\n");
-            return MODEM_ERROR;
-        }
+        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->valueInt);
     } else {
-        printf("Wasn't able to find if RTC sync status\r\n");
+        printf("Wasn't able to find number of SMSs\r\n");
         return MODEM_ERROR;
     }
+
+
+    printf("Stop GPRS\r\n");
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    return MODEM_SUCCESS;
 }
