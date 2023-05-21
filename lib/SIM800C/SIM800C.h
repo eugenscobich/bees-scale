@@ -26,13 +26,13 @@ typedef struct {
 
 typedef struct {
     bool found;
-    char* value;
+    const char* value;
     uint32_t valueInt;
     uint8_t length;
 } SIM800CFindInRxBufferSingleResult;
 
 typedef struct {
-    SIM800CFindInRxBufferSingleResult result[7];
+    SIM800CFindInRxBufferSingleResult results[7];
 } SIM800CFindInRxBufferResult;
 
 class SIM800C {
@@ -79,8 +79,8 @@ public:
     SIM800CCmdResult* sendCmd(const char* cmd, const char* expectedResponse, uint16_t receiveTimeout = 1000, uint8_t numberOfRetries = 0);
     SIM800CCmdResult* waitForMessage(const char *message, uint16_t waitTimeout);
 
-    SIM800CFindInRxBufferResult* findInRxBuffer(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL, const char* seventhTo = NULL);
-    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo = NULL, const char* thirdTo = NULL, const char* forthTo = NULL, const char* fifthTo = NULL, const char* sixthTo = NULL, const char* seventhTo = NULL);
+    SIM800CFindInRxBufferResult* findInRxBuffer(uint8_t numberOfArguments, const char* from, ...);
+    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from ...);
 };
 
 #endif // __SIM800C_H__

@@ -2,6 +2,7 @@
 #include "usart.h"
 #include <stdio.h>
 #include <cstring>
+#include <cstdarg>
 
 SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin, void(*_updateFunction)()):
     huart(_huart),
@@ -151,31 +152,47 @@ SIM800CCmdResult* SIM800C::_waitForMessage(const char *message, uint16_t receive
 }
 
 
-SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(const char* from, const char* to, const char* secondTo, const char* thirdTo, const char* forthTo, const char* fifthTo, const char* sixthTo) {
-    sim800cFindInRxBufferResult.found = false;
-    sim800cFindInRxBufferResult.value = NULL;
-    sim800cFindInRxBufferResult.length = 0;
-    sim800cFindInRxBufferResult.secondFound = false;
-    sim800cFindInRxBufferResult.secondValue = NULL;
-    sim800cFindInRxBufferResult.secondLength = 0;
-    sim800cFindInRxBufferResult.thirdFound = false;
-    sim800cFindInRxBufferResult.thirdValue = NULL;
-    sim800cFindInRxBufferResult.thirdLength = 0;
-    sim800cFindInRxBufferResult.forthValue = NULL;
-    sim800cFindInRxBufferResult.forthLength = 0;
-    sim800cFindInRxBufferResult.fifthValue = NULL;
-    sim800cFindInRxBufferResult.fifthLength = 0;
-    sim800cFindInRxBufferResult.sixthValue = NULL;
-    sim800cFindInRxBufferResult.sixthLength = 0;
+SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(uint8_t numberOfArguments, const char* from, ...) {
+    va_list vl;
+    va_start(vl, from);
 
+    const char* fromMessage = from;
+    const char* previousFoundFromMessage = strstr((const char *)sim800cCmdResult.rxBuffer, fromMessage);
+    const char* toMessage = NULL;
+    if (previousFoundFromMessage) {
+        for (uint8_t i = 0; i < numberOfArguments; i++) {            
+            toMessage = va_arg(vl, const char*);
+            uint8_t startIndex = (uint8_t*)previousFoundFromMessage - sim800cCmdResult.rxBuffer + strlen(fromMessage);
+            const char* foundToMessage = strstr(previousFoundFromMessage + strlen(fromMessage), toMessage);
+            if (foundToMessage) {
+                uint8_t endIndex = (uint8_t*)foundToMessage - sim800cCmdResult.rxBuffer;
+                sim800cFindInRxBufferResult.results[i].found = true;
+                sim800cFindInRxBufferResult.results[i].value = previousFoundFromMessage + strlen(fromMessage);
+                sim800cFindInRxBufferResult.results[i].length = endIndex - startIndex;   
+                sim800cFindInRxBufferResult.results[i].valueInt = _charArray2int(sim800cFindInRxBufferResult.results[i].value, sim800cFindInRxBufferResult.results[i].length);
+                previousFoundFromMessage = foundToMessage;
+                fromMessage = toMessage;
+            } else {
+                sim800cFindInRxBufferResult.results[i].found = false;
+                sim800cFindInRxBufferResult.results[i].value = NULL;
+                sim800cFindInRxBufferResult.results[i].length = 0;  
+                break;
+            }         
+        }
+    }
+
+    
+    
+
+/*
     char* foundFromMessage = strstr((char *)sim800cCmdResult.rxBuffer, from);
-    if (foundFromMessage) {
-        uint8_t startIndex = (uint8_t*)foundFromMessage - sim800cCmdResult.rxBuffer + strlen(from);
-        char* foundToMessage = strstr(foundFromMessage + strlen(from), to);
+    if (previousFoundFromMessage) {
+        uint8_t startIndex = (uint8_t*)previousFoundFromMessage - sim800cCmdResult.rxBuffer + strlen(from);
+        char* foundToMessage = strstr(previousFoundFromMessage + strlen(from), to);
         if (foundToMessage) {
             uint8_t endIndex = (uint8_t*)foundToMessage - sim800cCmdResult.rxBuffer;
             sim800cFindInRxBufferResult.found = true;
-            sim800cFindInRxBufferResult.value = foundFromMessage + strlen(from);
+            sim800cFindInRxBufferResult.value = previousFoundFromMessage + strlen(from);
             sim800cFindInRxBufferResult.length = endIndex - startIndex;
 
             if (secondTo != NULL) {
@@ -234,11 +251,13 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(const char* from, const cha
             } 
         } 
     }
-
+    */
+    va_end(vl);
     return &sim800cFindInRxBufferResult;
 }
 
-SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(const char* from, const char* to, const char* secondTo, const char* thirdTo) {
+SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(const char* from ...) {
+    /*
     findInRxBuffer(from, to, secondTo, thirdTo);
     sim800cFindInRxBufferResult.valueInt = 0;
     sim800cFindInRxBufferResult.secondValueInt = 0;
@@ -252,6 +271,7 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(const char* fr
     if (sim800cFindInRxBufferResult.thirdFound) {
         sim800cFindInRxBufferResult.thirdValueInt = _charArray2int(sim800cFindInRxBufferResult.thirdValue, sim800cFindInRxBufferResult.thirdLength);
     }
+    */
     return &sim800cFindInRxBufferResult;
 }
 
@@ -259,6 +279,10 @@ uint32_t SIM800C::_charArray2int (const char* array, uint8_t length) {
     uint32_t number = 0;
     uint32_t mult = 1;
     for (uint8_t i = length; i > 0; i--) {
+        if ((array[i - 1] < '0' || array[i - 1] > '9') && array[i - 1] != '-') {
+            return 0;
+        }
+
         if (array[i - 1] == '-') {
             if (number) {
                 number = -number;

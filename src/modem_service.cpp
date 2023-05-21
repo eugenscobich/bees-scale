@@ -61,7 +61,7 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
         return MODEM_ERROR;
     }
     printf("Read SIM information to confirm whether the SIM is plugged.\r\n");
-    sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 10000);
+    sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
@@ -75,9 +75,9 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
-    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CSQ: ", ",");
-    if (findResult->found) {
-        signalQuality = (uint8_t)findResult->valueInt;
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(1, "+CSQ: ", ",");
+    if (findResult->results[0].found) {
+        signalQuality = (uint8_t)findResult->results[0].valueInt;
         printf("Signal quality: %d\r\n", signalQuality);
     } else {
         printf("Wasn't able to find signal quality in the response\r\n");
@@ -89,22 +89,22 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
-    findResult = sim800c->findInRxBufferAndParseToInt("+CBC: ", ",", ",", "\r\n");
-    if (findResult->found) {
-        printf("Is Battery charging?: %d\r\n", (uint8_t)findResult->valueInt);
+    findResult = sim800c->findInRxBuffer(3, "+CBC: ", ",", ",", "\r\n");
+    if (findResult->results[0].found) {
+        printf("Is Battery charging?: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         printf("Wasn't able to find if battery is chraging in the response\r\n");
         return MODEM_ERROR;
     }
-    if (findResult->secondFound) {
-        batteryLevel = (uint8_t)findResult->secondValueInt;
+    if (findResult->results[1].found) {
+        batteryLevel = (uint8_t)findResult->results[1].valueInt;
         printf("Battery level: %d\r\n", batteryLevel);
     } else {
         printf("Wasn't able to find battery level in the response\r\n");
         return MODEM_ERROR;
     }
-    if (findResult->thirdFound) {
-        batteryVoltage = (uint16_t)findResult->thirdValueInt;
+    if (findResult->results[2].found) {
+        batteryVoltage = (uint16_t)findResult->results[2].valueInt;
         printf("Battery voltage: %d\r\n", batteryVoltage);
     } else {
         printf("Wasn't able to find battery voltage in the response\r\n");
@@ -206,16 +206,16 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
-    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CPMS: \"SM_P\",", ",");
-    if (findResult->found) {
-        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->valueInt);
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(1, "+CPMS: \"SM_P\",", ",");
+    if (findResult->results[0].found) {
+        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         printf("Wasn't able to find number of SMSs\r\n");
         return MODEM_ERROR;
     }
 
     char* settingsSMSMessage;
-    for (size_t i = 1; i < findResult->valueInt + 1; i++) {
+    for (size_t i = 1; i < findResult->results[0].valueInt + 1; i++) {
         printf("SMS #%d\r\n", i);
         char cmd[10];
         sprintf(cmd, "AT+CMGR=%d", i);
@@ -224,23 +224,23 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
             return MODEM_ERROR;
         }
 
-        SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer("+CMGR: \"", "\",\"", "\",\"", "\",\"", "\"\r\n", "\r\n\r\nOK");
-        if (findResult->secondFound) {
-            printf("Phone number: %.*s\r\n", findResult->secondLength, findResult->secondValue);
+        SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(5, "+CMGR: \"", "\",\"", "\",\"", "\",\"", "\"\r\n", "\r\n\r\nOK");
+        if (findResult->results[1].found) {
+            printf("Phone number: %.*s\r\n", findResult->results[1].length, findResult->results[1].value);
         } else {
             printf("Wasn't able to find SMS #%d phone number\r\n", i);
             return MODEM_ERROR;
         }
 
-        if (findResult->fifthFound) {
-            printf("SMS message: %.*s\r\n", findResult->fifthLength, findResult->fifthValue);
+        if (findResult->results[4].found) {
+            printf("SMS message: %.*s\r\n", findResult->results[4].length, findResult->results[4].value);
         } else {
             printf("Wasn't able to find SMS #%d message\r\n", i);
             return MODEM_ERROR;
         }
 
         const char* smsTitle = "Bees Scale Settings";
-        settingsSMSMessage = strstr(findResult->fifthValue, smsTitle);
+        settingsSMSMessage = strstr(findResult->results[4].value, smsTitle);
         if (settingsSMSMessage) {
             /*
             Bees Scale Settings
@@ -433,8 +433,8 @@ ModemServiceResultStatus ModemService::configureDateAndTime() {
     }
 
     SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CCLK: \"", "/", "/", ",", ":", ":", "+", "\"");
-    if (findResult->found) {
-        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->valueInt);
+    if (findResult->results[0].found) {
+        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         printf("Wasn't able to find number of SMSs\r\n");
         return MODEM_ERROR;
