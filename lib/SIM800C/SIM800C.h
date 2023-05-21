@@ -80,7 +80,6 @@ public:
     SIM800CCmdResult* waitForMessage(const char *message, uint16_t waitTimeout);
 
     SIM800CFindInRxBufferResult* findInRxBuffer(uint8_t numberOfArguments, const char* from, ...);
-    SIM800CFindInRxBufferResult* findInRxBufferAndParseToInt(const char* from ...);
 };
 
 #endif // __SIM800C_H__

@@ -1,4 +1,5 @@
 #include "modem_service.h"
+#include "rtc.h"
 #include <cstring>
 
 ModemService::ModemService(SIM800C* _sim800c, void(*_updateFunction)()) :
@@ -432,14 +433,46 @@ ModemServiceResultStatus ModemService::configureDateAndTime() {
         return MODEM_ERROR;
     }
 
-    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBufferAndParseToInt("+CCLK: \"", "/", "/", ",", ":", ":", "+", "\"");
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(7, "+CCLK: \"", "/", "/", ",", ":", ":", "+", "\"");
     if (findResult->results[0].found) {
-        printf("Number Of SMS: %d\r\n", (uint8_t)findResult->results[0].valueInt);
+        printf("Found Date: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
-        printf("Wasn't able to find number of SMSs\r\n");
+        printf("Wasn't able to find the date\r\n");
+        return MODEM_ERROR;
+    }
+    if (findResult->results[1].found) {
+        printf("Found Month: %d\r\n", (uint8_t)findResult->results[1].valueInt);
+    } else {
+        printf("Wasn't able to find the month\r\n");
+        return MODEM_ERROR;
+    }
+    if (findResult->results[2].found) {
+        printf("Found Year: %d\r\n", (uint8_t)findResult->results[2].valueInt);
+    } else {
+        printf("Wasn't able to find year\r\n");
+        return MODEM_ERROR;
+    }
+    if (findResult->results[3].found) {
+        printf("Found Hours: %d\r\n", (uint8_t)findResult->results[3].valueInt);
+    } else {
+        printf("Wasn't able to find hours\r\n");
+        return MODEM_ERROR;
+    }
+    if (findResult->results[4].found) {
+        printf("Found Minutes: %d\r\n", (uint8_t)findResult->results[4].valueInt);
+    } else {
+        printf("Wasn't able to find minutes\r\n");
+        return MODEM_ERROR;
+    }
+    if (findResult->results[5].found) {
+        printf("Found Seconds: %d\r\n", (uint8_t)findResult->results[5].valueInt);
+    } else {
+        printf("Wasn't able to find seconds\r\n");
         return MODEM_ERROR;
     }
 
+    HAL_RTC_SetLocalDate((uint8_t)findResult->results[1].valueInt, (uint8_t)findResult->results[0].valueInt, (uint8_t)findResult->results[2].valueInt);
+    HAL_RTC_SetLocalTime((uint8_t)findResult->results[3].valueInt, (uint8_t)findResult->results[4].valueInt, (uint8_t)findResult->results[5].valueInt);
 
     printf("Stop GPRS\r\n");
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");

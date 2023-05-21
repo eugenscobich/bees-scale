@@ -180,100 +180,10 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(uint8_t numberOfArguments, 
             }         
         }
     }
-
-    
-    
-
-/*
-    char* foundFromMessage = strstr((char *)sim800cCmdResult.rxBuffer, from);
-    if (previousFoundFromMessage) {
-        uint8_t startIndex = (uint8_t*)previousFoundFromMessage - sim800cCmdResult.rxBuffer + strlen(from);
-        char* foundToMessage = strstr(previousFoundFromMessage + strlen(from), to);
-        if (foundToMessage) {
-            uint8_t endIndex = (uint8_t*)foundToMessage - sim800cCmdResult.rxBuffer;
-            sim800cFindInRxBufferResult.found = true;
-            sim800cFindInRxBufferResult.value = previousFoundFromMessage + strlen(from);
-            sim800cFindInRxBufferResult.length = endIndex - startIndex;
-
-            if (secondTo != NULL) {
-                startIndex = (uint8_t*)foundToMessage - sim800cCmdResult.rxBuffer + strlen(to);
-                char* foundSecondToMessage = strstr(foundToMessage + strlen(to), secondTo);
-                if (foundSecondToMessage) {
-                    endIndex = (uint8_t*)foundSecondToMessage - sim800cCmdResult.rxBuffer;
-                    sim800cFindInRxBufferResult.secondFound = true;
-                    sim800cFindInRxBufferResult.secondValue = foundToMessage + strlen(to);
-                    sim800cFindInRxBufferResult.secondLength = endIndex - startIndex;
-
-                    if (thirdTo != NULL) {
-                        startIndex = (uint8_t*)foundSecondToMessage - sim800cCmdResult.rxBuffer + strlen(secondTo);
-                        char* foundThirdToMessage = strstr(foundSecondToMessage + strlen(secondTo), thirdTo);
-                        if (foundThirdToMessage) {
-                            endIndex = (uint8_t*)foundThirdToMessage - sim800cCmdResult.rxBuffer;
-                            sim800cFindInRxBufferResult.thirdFound = true;
-                            sim800cFindInRxBufferResult.thirdValue = foundSecondToMessage + strlen(secondTo);
-                            sim800cFindInRxBufferResult.thirdLength = endIndex - startIndex;
-                        }
-
-                        if (forthTo != NULL) {
-                            startIndex = (uint8_t*)foundThirdToMessage - sim800cCmdResult.rxBuffer + strlen(thirdTo);
-                            char* foundForthToMessage = strstr(foundThirdToMessage + strlen(thirdTo), forthTo);
-                            if (foundForthToMessage) {
-                                endIndex = (uint8_t*)foundForthToMessage - sim800cCmdResult.rxBuffer;
-                                sim800cFindInRxBufferResult.forthFound = true;
-                                sim800cFindInRxBufferResult.forthValue = foundThirdToMessage + strlen(thirdTo);
-                                sim800cFindInRxBufferResult.forthLength = endIndex - startIndex;
-                            } 
-
-                            if (fifthTo != NULL) {
-                                startIndex = (uint8_t*)foundForthToMessage - sim800cCmdResult.rxBuffer + strlen(forthTo);
-                                char* foundFifthToMessage = strstr(foundForthToMessage + strlen(forthTo), fifthTo);
-                                if (foundFifthToMessage) {
-                                    endIndex = (uint8_t*)foundFifthToMessage - sim800cCmdResult.rxBuffer;
-                                    sim800cFindInRxBufferResult.fifthFound = true;
-                                    sim800cFindInRxBufferResult.fifthValue = foundForthToMessage + strlen(forthTo);
-                                    sim800cFindInRxBufferResult.fifthLength = endIndex - startIndex;
-                                } 
-
-                                if (sixthTo != NULL) {
-                                    startIndex = (uint8_t*)foundFifthToMessage - sim800cCmdResult.rxBuffer + strlen(fifthTo);
-                                    char* foundSixthToMessage = strstr(foundFifthToMessage + strlen(fifthTo), sixthTo);
-                                    if (foundSixthToMessage) {
-                                        endIndex = (uint8_t*)foundSixthToMessage - sim800cCmdResult.rxBuffer;
-                                        sim800cFindInRxBufferResult.sixthFound = true;
-                                        sim800cFindInRxBufferResult.sixthValue = foundFifthToMessage + strlen(fifthTo);
-                                        sim800cFindInRxBufferResult.sixthLength = endIndex - startIndex;
-                                    } 
-                                }
-                            }
-                        }
-                    }
-                } 
-            } 
-        } 
-    }
-    */
     va_end(vl);
     return &sim800cFindInRxBufferResult;
 }
 
-SIM800CFindInRxBufferResult* SIM800C::findInRxBufferAndParseToInt(const char* from ...) {
-    /*
-    findInRxBuffer(from, to, secondTo, thirdTo);
-    sim800cFindInRxBufferResult.valueInt = 0;
-    sim800cFindInRxBufferResult.secondValueInt = 0;
-    sim800cFindInRxBufferResult.thirdValueInt = 0;
-    if (sim800cFindInRxBufferResult.found) {
-        sim800cFindInRxBufferResult.valueInt = _charArray2int(sim800cFindInRxBufferResult.value, sim800cFindInRxBufferResult.length);
-    }
-    if (sim800cFindInRxBufferResult.secondFound) {
-        sim800cFindInRxBufferResult.secondValueInt = _charArray2int(sim800cFindInRxBufferResult.secondValue, sim800cFindInRxBufferResult.secondLength);
-    }
-    if (sim800cFindInRxBufferResult.thirdFound) {
-        sim800cFindInRxBufferResult.thirdValueInt = _charArray2int(sim800cFindInRxBufferResult.thirdValue, sim800cFindInRxBufferResult.thirdLength);
-    }
-    */
-    return &sim800cFindInRxBufferResult;
-}
 
 uint32_t SIM800C::_charArray2int (const char* array, uint8_t length) {    
     uint32_t number = 0;
