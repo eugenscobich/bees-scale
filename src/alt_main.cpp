@@ -50,7 +50,8 @@ int alt_main() {
     } else {
         // TODO Check modem and power on if need
         if (deviceIsMaster) {
-            ledService.blinkGreenLed(0, 200);
+            ledService.blinkGreenLed(0, 300);
+
             modemResultStatus = modemService.startModemIfNeed();
             handleModemResultStatus(modemResultStatus, "Wasn't able to start SIM800C module");
 
@@ -81,7 +82,7 @@ int alt_main() {
 
             if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND) {
                 printf("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
-                ledService.blinkGreenLed(0, 500);
+                ledService.blinkGreenLed(0, 1000);
                 modemResultStatus = modemService.waitForSettingsSMS();
                 ledService.stopBlinkGreenLed();
                 handleModemResultStatus(modemResultStatus, "Wasn't able to receive settings SMS");
@@ -89,7 +90,7 @@ int alt_main() {
 
             if (modemResultStatus == MODEM_SUCCESS) {
                 modemResultStatus = modemService.configureDateAndTime();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to start GPRS");   
+                handleModemResultStatus(modemResultStatus, "Wasn't able to configure date and time");   
             }
             
 

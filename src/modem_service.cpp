@@ -29,19 +29,20 @@ ModemServiceResultStatus ModemService::startModemIfNeed() {
     changeSim800CPwrPinToOuput();
     sim800cResult  = sim800c->sendCmd("AT", "OK", 1000, 2);
     if (sim800cResult->status == SIM800C_SUCCESS) {
-        printf("Modem accepted AT command\r\n");
+        printf("Modem accepted AT command!\r\n");
         return MODEM_SUCCESS;
     } else {
-        printf("Modem didn't respond. Power On!\r\n");
+        printf("Modem didn't respond\r\n");
+        printf("Power on the Modem!\r\n");
         _nonBlockingDelay(2000);
         HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_RESET);
         _nonBlockingDelay(4000);
         printf("Check if Modem repond at AT command\r\n");
-        sim800cResult = sim800c->sendCmd("AT", "OK", 2000, 2);
+        sim800cResult = sim800c->sendCmd("AT", "OK", 1000, 3);
         if (sim800cResult->status != SIM800C_SUCCESS) {
             return MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON;
         }
-        printf("Modem accepted AT command\r\n");
+        printf("Modem accepted AT command!\r\n");
         return MODEM_SUCCESS;
     }
 }
@@ -62,12 +63,12 @@ ModemServiceResultStatus ModemService::checkModemHealth() {
         return MODEM_ERROR;
     }
     printf("Read SIM information to confirm whether the SIM is plugged.\r\n");
-    sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 2);
+    sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 1000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
     printf("Check if the SIM is locked by pin.\r\n");
-    sim800cResult = sim800c->sendCmd("AT+CPIN?", "+CPIN: READY", 5000);
+    sim800cResult = sim800c->sendCmd("AT+CPIN?", "+CPIN: READY", 5000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         return MODEM_ERROR;
     }
@@ -227,7 +228,8 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
 
         SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(5, "+CMGR: \"", "\",\"", "\",\"", "\",\"", "\"\r\n", "\r\n\r\nOK");
         if (findResult->results[1].found) {
-            printf("Phone number: %.*s\r\n", findResult->results[1].length, findResult->results[1].value);
+            strncpy(phoneNumber, findResult->results[1].value, findResult->results[1].length > PHONE_NUMBER_MAX_LENGTH ? PHONE_NUMBER_MAX_LENGTH : findResult->results[1].length);
+            printf("Phone number: %s\r\n", phoneNumber);
         } else {
             printf("Wasn't able to find SMS #%d phone number\r\n", i);
             return MODEM_ERROR;
@@ -375,7 +377,6 @@ ModemServiceResultStatus ModemService::deleteAllSMS() {
 
 ModemServiceResultStatus ModemService::waitForSettingsSMS() {
     printf("Wait for settings SMS\r\n");
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
     sim800cResult = sim800c->waitForMessage("+CMTI: ", 60000);
     if (sim800cResult->status == SIM800C_SUCCESS) {
         ModemServiceResultStatus modemServiceResultStatus = findSMSWithSettingsAndConfigureModem();
@@ -383,7 +384,7 @@ ModemServiceResultStatus ModemService::waitForSettingsSMS() {
             return MODEM_SUCCESS;
         } else {
             printf("Received SMS doesn't conatins settings\r\n");
-            return MODEM_ERROR_RECEIVED_SMS_DOESN_T_CONTAINS_SETTINGS;
+            return waitForSettingsSMS();
         }
     } else if (sim800cResult->status == SIM800C_TIMEOUT) {
         printf("SMS is not received\r\n");

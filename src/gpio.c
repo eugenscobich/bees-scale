@@ -53,21 +53,21 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(RED_LED_GPIO_Port, RED_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, NRF_CSN_Pin|SIM800C_DTR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, NRF_CE_Pin|HX711_SCK_Pin|HTU21D_1_Pin|HTU21D_2_Pin
-                          |HTU21D_3_Pin|RED_LED_Pin|BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
+                          |HTU21D_3_Pin|GREEN_LED_Pin|BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PtPin */
-  GPIO_InitStruct.Pin = LED_GREEN_Pin;
+  GPIO_InitStruct.Pin = RED_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GREEN_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(RED_LED_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PtPin */
   GPIO_InitStruct.Pin = NRF_CSN_Pin;
@@ -98,7 +98,7 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pins : PBPin PBPin PBPin PBPin
                            PBPin PBPin */
   GPIO_InitStruct.Pin = HX711_SCK_Pin|HTU21D_1_Pin|HTU21D_2_Pin|HTU21D_3_Pin
-                          |RED_LED_Pin|BATERY_LEVEL_CHECK_Pin;
+                          |GREEN_LED_Pin|BATERY_LEVEL_CHECK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

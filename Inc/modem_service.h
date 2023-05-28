@@ -5,6 +5,7 @@
 #include "SIM800C.h"
 #include <stdio.h>
 
+#define PHONE_NUMBER_MAX_LENGTH 20
 #define APN_MAX_LENGTH 20
 #define USER_MAX_LENGTH 20
 #define PWD_MAX_LENGTH 20
@@ -33,6 +34,7 @@ private:
     uint8_t signalQuality = 0;
     uint8_t batteryLevel = 0;
     uint16_t batteryVoltage = 0;
+    char phoneNumber[PHONE_NUMBER_MAX_LENGTH + 1];
     char apn[APN_MAX_LENGTH + 1];
     char user[USER_MAX_LENGTH + 1];
     char pwd[PWD_MAX_LENGTH + 1];

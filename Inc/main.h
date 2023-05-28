@@ -57,8 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LED_GREEN_Pin GPIO_PIN_13
-#define LED_GREEN_GPIO_Port GPIOC
+#define RED_LED_Pin GPIO_PIN_13
+#define RED_LED_GPIO_Port GPIOC
 #define BATERY_LEVEL_Pin GPIO_PIN_1
 #define BATERY_LEVEL_GPIO_Port GPIOA
 #define NRF_CSN_Pin GPIO_PIN_4
@@ -87,8 +87,8 @@ void Error_Handler(void);
 #define HTU21D_2_GPIO_Port GPIOB
 #define HTU21D_3_Pin GPIO_PIN_5
 #define HTU21D_3_GPIO_Port GPIOB
-#define RED_LED_Pin GPIO_PIN_6
-#define RED_LED_GPIO_Port GPIOB
+#define GREEN_LED_Pin GPIO_PIN_6
+#define GREEN_LED_GPIO_Port GPIOB
 #define BUTTON_Pin GPIO_PIN_7
 #define BUTTON_GPIO_Port GPIOB
 #define NRF_IRQ_Pin GPIO_PIN_8
