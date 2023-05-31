@@ -1,5 +1,6 @@
 #include "modem_service.h"
 #include "rtc.h"
+#include <stdio.h>
 #include <cstring>
 
 ModemService::ModemService(SIM800C* _sim800c, void(*_updateFunction)()) :
@@ -26,7 +27,7 @@ bool ModemService::isSIM800CPresent() {
 
 ModemServiceResultStatus ModemService::startModemIfNeed() {
     printf("Start Modem if need\r\n");
-    changeSim800CPwrPinToOuput();
+    _changeSim800CPwrPinToOuput();
     sim800cResult  = sim800c->sendCmd("AT", "OK", 1000, 2);
     if (sim800cResult->status == SIM800C_SUCCESS) {
         printf("Modem accepted AT command!\r\n");
@@ -314,7 +315,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
 
         printf("Configure APN\r\n");
         // AT+SAPBR=3,1,APN,"APN"
-        char apnCmd[APN_MAX_LENGTH + 20];
+        char apnCmd[APN_MAX_LENGTH + 22];
         sprintf(apnCmd, "AT+SAPBR=3,1,\"APN\",\"%s\"", apn);
         sim800cResult = sim800c->sendCmd(apnCmd, "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
@@ -349,7 +350,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
         if (pwd[0] != '\0') {
             printf("Configure PWD\r\n");
             // AT+SAPBR=3,1,PWD,"Password"
-            char pwdCmd[PWD_MAX_LENGTH + 20];
+            char pwdCmd[PWD_MAX_LENGTH + 22];
             sprintf(pwdCmd, "AT+SAPBR=3,1,\"PWD\",\"%s\"", pwd);
             sim800cResult = sim800c->sendCmd(pwdCmd, "OK");
             if (sim800cResult->status != SIM800C_SUCCESS) {
@@ -482,4 +483,15 @@ ModemServiceResultStatus ModemService::configureDateAndTime() {
     }
 
     return MODEM_SUCCESS;
+}
+
+void ModemService::_changeSim800CPwrPinToOuput() {
+    HAL_GPIO_WritePin(SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, GPIO_PIN_SET);
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    /*Configure GPIO pins : PAPin PAPin */
+    GPIO_InitStruct.Pin = SIM800C_PWR_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(SIM800C_PWR_GPIO_Port, &GPIO_InitStruct);
 }

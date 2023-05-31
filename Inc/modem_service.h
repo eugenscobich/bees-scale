@@ -1,9 +1,7 @@
 #ifndef __MODEM_SERVICE_H__
 #define __MODEM_SERVICE_H__
 
-#include "gpio.h"
 #include "SIM800C.h"
-#include <stdio.h>
 
 #define PHONE_NUMBER_MAX_LENGTH 20
 #define APN_MAX_LENGTH 20
@@ -41,6 +39,7 @@ private:
     char apiKey[API_KEY_MAX_LENGTH + 1];
     char host[HOST_MAX_LENGTH + 1];
     void _nonBlockingDelay(uint32_t delayInTicks);
+    void _changeSim800CPwrPinToOuput();
 public:
     ModemService(SIM800C* _sim800c, void(*updateFunction)());
     bool isSIM800CPresent();
