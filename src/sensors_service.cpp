@@ -28,31 +28,32 @@ SensorsService::SensorsService(HX711 *hx711_1, HX711 *hx711_2, HX711 *hx711_3, D
 void SensorsService::readSensors() {
     for (uint8_t i = 0; i < 3; i++)
     {
-        printf("Start read sensors: %d", i);
+        printf("Start read sensors: %d\r\n", i);
         sensors[1].hx711->disable();
         bool isSensorPresent = sensors[i].ds18b20->start();
         if (isSensorPresent) {
-            sensors[i].ds18b20->write(0x33);  // skread rom ROM
-            for (uint8_t j = 7; j >= 0 ; j--)
+            sensors[i].ds18b20->write(0x33);  // read ROM
+            for (uint8_t j = 8; j > 0; j--)
             {
-                sensors[i].rom[j] = sensors[i].ds18b20->read();
+                sensors[i].rom[j - 1] = sensors[i].ds18b20->read();
             }
             sensors[i].ds18b20->write(0x44);
             printf("Sensor %d ROM: %X%X%X%X%X%X%X%X\r\n", i, sensors[i].rom[0], sensors[i].rom[1], sensors[i].rom[2], sensors[i].rom[3], sensors[i].rom[4], sensors[i].rom[5], sensors[i].rom[6], sensors[i].rom[7]);
+            HAL_Delay(800);
             sensors[i].ds18b20->start();
             sensors[i].ds18b20->write(0xCC);
             sensors[i].ds18b20->write(0xBE);  // Read Scratch-pad
             uint8_t lsByte = sensors[i].ds18b20->read();
             sensors[i].temperature = ((sensors[i].ds18b20->read() << 8) | lsByte) * 0.0625;
-            printf("Sensor %d temperature: %d.%02d\r\n", (uint16_t)(sensors[i].temperature), (((uint16_t)(sensors[i].temperature * 100)) % 100));
+            printf("Sensor %d temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].temperature), (uint16_t)(((uint16_t)(sensors[i].temperature * 100)) % 100));
 
             Calibration* calibration = _findScaleCalibration(sensors[i].rom);
             if (calibration != NULL) {
-                sensors[1].hx711->setCoeficient(calibration->calibration);
-                sensors[1].hx711->setOffset(calibration->offset);
-                sensors[1].weight = sensors[1].hx711->getWeight(2);
+                sensors[i].hx711->setCoeficient(calibration->calibration);
+                sensors[i].hx711->setOffset(calibration->offset);
+                sensors[i].weight = sensors[i].hx711->getWeight(2);
             } else {
-                printf("Sensor %d. Calibration not found. Scale raw value: %d\r\n", sensors[1].hx711->getAverageValue(2));
+                printf("Sensor %d. Calibration not found. Scale raw value: %d\r\n", i, (int)sensors[i].hx711->getAverageValue(2));
             }
         } else {
             printf("Sensor %d temperature is not present\r\n", i);

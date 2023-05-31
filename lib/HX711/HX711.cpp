@@ -109,7 +109,7 @@ void HX711::powerUp()
 void HX711::disable()
 {
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_SET);
-    _hx711Delay(60 + 5);
+    _hx711Delay(100);
 }
 // #############################################################################################
 
