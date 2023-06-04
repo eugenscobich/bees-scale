@@ -1,4 +1,5 @@
 #include "sensors_service.h"
+#include "rtc.h"
 #include <stdio.h>
 
 #define NUMBER_OF_KNOWN_CALIBRATIONS 1
@@ -13,67 +14,139 @@ SensorsService::SensorsService(HX711 *hx711_1, HX711 *hx711_2, HX711 *hx711_3, D
 
     sensors[2].hx711 = hx711_3;
     sensors[2].ds18b20 = ds18b20_3;
-
-    calibrations[0].rom[0] = 0x00;
-    calibrations[0].rom[1] = 0x00;
-    calibrations[0].rom[2] = 0x00;
-    calibrations[0].rom[3] = 0x00;
-    calibrations[0].rom[4] = 0x00;
-    calibrations[0].rom[5] = 0x00;
-    calibrations[0].rom[6] = 0x00;
-    calibrations[0].rom[7] = 0x00;
-    calibrations[0].calibration = 100.0;
 }
 
-void SensorsService::readSensors() {
+void SensorsService::readSensors()
+{
     for (uint8_t i = 0; i < 3; i++)
     {
-        printf("Start read sensors: %d\r\n", i);
+        printf("Sensor %d. Start read sensor\r\n", i);
         sensors[1].hx711->disable();
         bool isSensorPresent = sensors[i].ds18b20->start();
-        if (isSensorPresent) {
-            sensors[i].ds18b20->write(0x33);  // read ROM
-            for (uint8_t j = 8; j > 0; j--)
+        if (isSensorPresent)
+        {
+            if (sensors[i].ds18b20->readRom())
             {
-                sensors[i].rom[j - 1] = sensors[i].ds18b20->read();
+                if (sensors[i].ds18b20->readTemperature())
+                {
+                    printf("Sensor %d. Temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].ds18b20->getTemperature()), (uint16_t)(((uint16_t)(sensors[i].ds18b20->getTemperature() * 100)) % 100));
+                    int16_t coeficientInt = sensors[i].ds18b20->getScratchpad()[2] << 8 | sensors[i].ds18b20->getScratchpad()[3];
+                    printf("Sensor %d. Found coeficient int: %d\r\n", i, coeficientInt);
+                    if (coeficientInt != 0)
+                    {
+                        float coeficient = coeficientInt / 100.0;
+                        sensors[i].hx711->setCoeficient(coeficient);
+                    }
+                    sensors[i].hx711->powerUp();
+                    sensors[i].hx711->readRawValue(1);
+                    printf("Sensor %d. Raw value: %d\r\n", i, sensors[i].hx711->getRawValue());
+                    printf("Sensor %d. Weight: %d.%02d\r\n", i, (uint32_t)(sensors[i].hx711->getWeight()), (uint8_t)(((uint32_t)(sensors[i].hx711->getWeight() * 100)) % 100));
+                }
+                else
+                {
+                    printf("Sensor %d. Could not read temperature\r\n", i);
+                }
             }
-            sensors[i].ds18b20->write(0x44);
-            printf("Sensor %d ROM: %X%X%X%X%X%X%X%X\r\n", i, sensors[i].rom[0], sensors[i].rom[1], sensors[i].rom[2], sensors[i].rom[3], sensors[i].rom[4], sensors[i].rom[5], sensors[i].rom[6], sensors[i].rom[7]);
-            HAL_Delay(800);
-            sensors[i].ds18b20->start();
-            sensors[i].ds18b20->write(0xCC);
-            sensors[i].ds18b20->write(0xBE);  // Read Scratch-pad
-            uint8_t lsByte = sensors[i].ds18b20->read();
-            sensors[i].temperature = ((sensors[i].ds18b20->read() << 8) | lsByte) * 0.0625;
-            printf("Sensor %d temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].temperature), (uint16_t)(((uint16_t)(sensors[i].temperature * 100)) % 100));
-
-            Calibration* calibration = _findScaleCalibration(sensors[i].rom);
-            if (calibration != NULL) {
-                sensors[i].hx711->setCoeficient(calibration->calibration);
-                sensors[i].hx711->setOffset(calibration->offset);
-                sensors[i].weight = sensors[i].hx711->getWeight(2);
-            } else {
-                printf("Sensor %d. Calibration not found. Scale raw value: %d\r\n", i, (int)sensors[i].hx711->getAverageValue(2));
+            else
+            {
+                printf("Sensor %d. Could not read Rom\r\n", i);
             }
-        } else {
-            printf("Sensor %d temperature is not present\r\n", i);
-        }   
-    }    
-}
-
-Calibration* SensorsService::_findScaleCalibration(uint8_t *rom) {
-    for (uint8_t i = 0; i < NUMBER_OF_KNOWN_CALIBRATIONS; i++)
-    {        
-        if (calibrations[i].rom[0] == rom[0] &&
-            calibrations[i].rom[1] == rom[1] &&
-            calibrations[i].rom[2] == rom[2] &&
-            calibrations[i].rom[3] == rom[3] &&
-            calibrations[i].rom[4] == rom[4] &&
-            calibrations[i].rom[5] == rom[5] &&
-            calibrations[i].rom[6] == rom[6] &&
-            calibrations[i].rom[7] == rom[7]) {
-                return calibrations + i;
+        }
+        else
+        {
+            printf("Sensor %d. Temperature sensor is not present\r\n", i);
         }
     }
-    return NULL;
+}
+
+void SensorsService::resetBackUpRegisters()
+{
+    printf("Reset Backup registers\r\n");
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR2, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR4, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR5, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR6, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR7, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR8, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR9, 0x0);
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR10, 0x0);
+    HAL_PWR_DisableBkUpAccess();
+}
+
+void SensorsService::calibrateScales(bool buttonIsPressed)
+{
+
+    printf("Start callibration\r\n");
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        sensors[1].hx711->disable();
+        if (HAL_RTCEx_BKUPRead(&hrtc, 3 * i + 1) == 0x0)
+        {
+            printf("Sensor %d. Start calibrate\r\n", i);
+            bool isSensorPresent = sensors[i].ds18b20->start();
+            if (isSensorPresent)
+            {
+                int32_t rawScaleValue = sensors[i].hx711->getAverageValue(1);
+                printf("Sensor %d. Calibration in progress. Scale raw value: %d\r\n", i, rawScaleValue);
+                HAL_PWR_EnableBkUpAccess();
+                HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 1, 0x1);
+                HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 3, 0xFFFF & rawScaleValue);
+                HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 2, rawScaleValue >> 16);
+                HAL_PWR_DisableBkUpAccess();
+            }
+            else
+            {
+                printf("Sensor %d. Temperature sensor is not present\r\n", i);
+            }
+        }
+        else if (buttonIsPressed)
+        {
+            printf("Sensor %d. Back Up registers had data and button is pressed, let's calibrate it\r\n", i);
+            bool isSensorPresent = sensors[i].ds18b20->start();
+            if (isSensorPresent)
+            {
+                int32_t rawScaleValue = sensors[i].hx711->getAverageValue(5);
+                printf("Sensor %d. Calibration in progress. Current raw value: %d\r\n", i, rawScaleValue);
+
+                uint32_t valueM = HAL_RTCEx_BKUPRead(&hrtc, 3 * i + 2);
+                uint32_t valueL = HAL_RTCEx_BKUPRead(&hrtc, 3 * i + 3);
+                int32_t previousValue = valueM << 16 | (0xFFFF & valueL);
+                printf("Sensor %d. Calibration in progress. Previous raw value: %d\r\n", i, previousValue);
+                float coeficient = ((previousValue - rawScaleValue) * 100) / 1000; // 1Kg
+                int16_t coeficientInt = (int16_t)coeficient;
+                printf("Sensor %d. Calibration in progress. Calculated coeficient int: %d\r\n", i, coeficientInt);
+                uint8_t tl = 0xFF & coeficientInt;
+                uint8_t th = coeficientInt >> 8;
+                if (sensors[i].ds18b20->saveBytes(th, tl))
+                {
+                    HAL_PWR_EnableBkUpAccess();
+                    HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 1, 0x0);
+                    HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 2, 0x0);
+                    HAL_RTCEx_BKUPWrite(&hrtc, 3 * i + 3, 0x0);
+                    HAL_PWR_DisableBkUpAccess();
+                    printf("Sensor %d. Calibration in progress. Coificient is saved successful\r\n", i);
+                }
+                else
+                {
+                    printf("Sensor %d. Calibration in progress. Coificient is not saved\r\n", i);
+                }
+            }
+            else
+            {
+                printf("Sensor %d. Temperature sensor is not present\r\n", i);
+            }
+        }
+        else
+        {
+            printf("Sensor %d. Could not finish calibration becasue button is not pressed\r\n", i);
+        }
+    }
+}
+
+Sensor *SensorsService::getSensors()
+{
+    return sensors;
 }

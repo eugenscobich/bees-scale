@@ -1,4 +1,5 @@
 #include "HX711.h"
+#include <stdio.h>
 
 HX711::HX711(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_HX711_DT_GPIOx, uint16_t _HX711_DT_GPIO_Pin,
              GPIO_TypeDef *_HX711_SCK_GPIOx, uint16_t _HX711_SCK_GPIO_Pin) : htim(_htim), HX711_DT_GPIOx(_HX711_DT_GPIOx),
@@ -25,8 +26,9 @@ int32_t HX711::getValue()
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
     while (HAL_GPIO_ReadPin(HX711_DT_GPIOx, HX711_DT_GPIO_Pin) == GPIO_PIN_SET)
     {
-        if (HAL_GetTick() - startTime > 400)
+        if (HAL_GetTick() - startTime > 600)
         {
+            printf("HX711: No response from sensor\r\n");
             return 0;
         }
     }
@@ -79,13 +81,35 @@ void HX711::calibrate(int32_t noload_raw, int32_t load_raw, float scale)
     coeficient = (load_raw - noload_raw) / scale;
 }
 // #############################################################################################
-float HX711::getWeight(uint16_t samples)
+void HX711::readRawValue(uint16_t samples)
 {
-    return (getAverageValue(samples) - offset) / coeficient;
+    rawValue = getAverageValue(samples);
+}
+// #############################################################################################
+int32_t HX711::getRawValue()
+{
+    return rawValue;
+}
+// #############################################################################################
+float HX711::getWeight()
+{
+    if (coeficient > 0) {
+        return (rawValue - offset) / coeficient;
+    } else {
+        return (rawValue - offset) / (coeficient * -1);
+    }
+    
 }
 // #############################################################################################
 void HX711::setCoeficient(float _coeficient)
 {
+    /*
+    if (_coeficient > 0) {
+        printf("HX711: Coeficient: %d.%02d\r\n", (int32_t)_coeficient, (uint16_t)(((uint16_t)(_coeficient * 100)) % 100));
+    } else {
+        printf("HX711: Coeficient: %d.%02d\r\n", (int32_t)_coeficient, (uint16_t)(((uint16_t)(_coeficient * -100)) % 100));
+    }
+    */
     coeficient = _coeficient;
 }
 // #############################################################################################
@@ -104,6 +128,7 @@ void HX711::powerDown()
 void HX711::powerUp()
 {
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
+    _hx711Delay(100);
 }
 // #############################################################################################
 void HX711::disable()

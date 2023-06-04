@@ -1,4 +1,5 @@
 #include "DS18B20.h"
+#include <stdio.h>
 
 DS18B20::DS18B20(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_DS18B20_DT_GPIOx, uint16_t _DS18B20_DT_GPIO_Pin) : htim(_htim),
                                                                                                              DS18B20_DT_GPIOx(_DS18B20_DT_GPIOx),
@@ -7,29 +8,11 @@ DS18B20::DS18B20(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_DS18B20_DT_GPIOx, uint
 }
 
 void DS18B20::_ds18B20Delay(uint16_t us)
-{
-    
+{  
     __HAL_TIM_SET_COUNTER(htim, 0);
     while ((__HAL_TIM_GET_COUNTER(htim)) < us)
     {
     }
-
-
-    // __IO uint32_t currentTicks = SysTick->VAL;
-    // /* Number of ticks per millisecond */
-    // const uint32_t tickPerMs = SysTick->LOAD + 1;
-    // /* Number of ticks to count */
-    // const uint32_t nbTicks = ((us - ((us > 0) ? 1 : 0)) * tickPerMs) / 1000;
-    // /* Number of elapsed ticks */
-    // uint32_t elapsedTicks = 0;
-    // __IO uint32_t oldTicks = currentTicks;
-    // do
-    // {
-    //     currentTicks = SysTick->VAL;
-    //     elapsedTicks += (oldTicks < currentTicks) ? tickPerMs + oldTicks - currentTicks : oldTicks - currentTicks;
-    //     oldTicks = currentTicks;
-    // } while (nbTicks > elapsedTicks);
-    
 }    
 
 // #############################################################################################
@@ -91,7 +74,7 @@ void DS18B20::write(uint8_t data)
         {
             _high();
         }
-        _ds18B20Delay(50);
+        _ds18B20Delay(55);
         _high();
     }
 }
@@ -110,24 +93,150 @@ uint8_t DS18B20::read()
     uint8_t value = 0;
     _setPinAsOutput();
     _high();
-    _ds18B20Delay(2);
+    _ds18B20Delay(1);
     for (int i = 0; i < 8; i++)
     {
         _low();
         _ds18B20Delay(1);
         _high();
         _setPinAsInput();
-        _ds18B20Delay(5);
+        _ds18B20Delay(4);
         value >>= 1;
         if (HAL_GPIO_ReadPin(DS18B20_DT_GPIOx, DS18B20_DT_GPIO_Pin)) // if the pin is HIGH
         {
             value |= 0x80;
         }
-        _ds18B20Delay(55);
+        _ds18B20Delay(40);
         _setPinAsOutput();
         _high();
     }
     return value;
+}
+
+// #############################################################################################
+bool DS18B20::readRom()
+{
+    write(0x33); // read ROM
+    for (uint8_t j = 0; j < 8; j++)
+    {
+        rom[j] = read();
+    }
+    printf("DS18B20: Read Rom=%02X%02X%02X%02X%02X%02X%02X%02X\r\n", rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
+    return verifyRomCrc();
+}
+
+// #############################################################################################
+uint8_t* DS18B20::getRom()
+{
+    return rom;
+}
+
+// #############################################################################################
+void DS18B20::waitForTemperatureRead()
+{
+    _setPinAsOutput();
+    _high();
+    _ds18B20Delay(2);
+    _low();
+    _ds18B20Delay(1);
+    _high();
+    _setPinAsInput();
+    _ds18B20Delay(10);
+    uint32_t tick = HAL_GetTick();
+    while (HAL_GPIO_ReadPin(DS18B20_DT_GPIOx, DS18B20_DT_GPIO_Pin) == GPIO_PIN_RESET) {
+        if (tick + 800 < HAL_GetTick())
+        {
+            return;
+        }
+    }
+}
+
+bool DS18B20::saveBytes(uint8_t th, uint8_t tl) {
+    start();
+    readScratchpad();
+    start();
+    write(0xCC);
+    write(0x4E);
+    write(th);
+    write(tl);
+    write(scratchpad[4]);
+    start();
+    if (readScratchpad() && scratchpad[2] == th && scratchpad[3] == tl) {
+        start();
+        write(0xCC);
+        write(0x48);
+        HAL_Delay(10);
+        return true;
+    }
+    return false;
+}
+
+// #############################################################################################
+bool DS18B20::readScratchpad() {
+    write(0xCC);
+    write(0xBE);
+    for (uint8_t i = 0; i < 9; i++)
+    {
+        scratchpad[i] = read();        
+    }
+    printf("DS18B20: Read scratchpad=%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n", scratchpad[0], scratchpad[1], scratchpad[2], scratchpad[3], scratchpad[4], scratchpad[5], scratchpad[6], scratchpad[7], scratchpad[8]);
+    return verifyScratchpadCrc();
+}
+
+// #############################################################################################
+uint8_t* DS18B20::getScratchpad() {
+    return scratchpad;
+}
+
+// #############################################################################################
+bool DS18B20::readTemperature() {
+    temperature = 0;
+    write(0x44);
+    waitForTemperatureRead();
+    start();
+    if (readScratchpad()) {
+        uint8_t lsByte = scratchpad[0];
+        temperature = ((scratchpad[1] << 8) | lsByte) * 0.0625;
+        temperature = temperature - 0.25 + ((scratchpad[7] - scratchpad[6]) / scratchpad[7]);
+        return true;
+    }
+    return false;
+}
+
+// #############################################################################################
+float DS18B20::getTemperature() {
+    return temperature;
+}
+
+// #############################################################################################
+bool DS18B20::verifyScratchpadCrc() {
+    return _verifyCrc(scratchpad, sizeof(scratchpad));
+}
+
+// #############################################################################################
+bool DS18B20::verifyRomCrc() {
+    return _verifyCrc(rom, sizeof(rom));
+}
+
+// #############################################################################################
+bool DS18B20::_verifyCrc(uint8_t* bytes, uint8_t arrayLength) {
+    uint8_t lastByte = bytes[arrayLength - 1];
+    uint8_t	crc = CRC8INIT;
+    uint8_t feedback_bit;
+    for (uint8_t i = 0; i < arrayLength - 1; i++)
+	{
+		uint8_t data = bytes[i];
+        for (uint8_t j = 8; j; j--) {
+			feedback_bit = (crc ^ data) & 0x01;
+			crc >>= 1;
+			if (feedback_bit) {
+				crc ^= 0x8C;
+			}
+			data >>= 1;
+		}
+	}
+    //printf("DS18B20: Calculated CRC=%02X\r\n", crc);
+    return lastByte == crc;
 }
 
 // #############################################################################################

@@ -37,6 +37,7 @@ uint8_t data[32] = {0};
 
 bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
+bool deviceWasWakedUpFromPower = false;
 bool buttonIsPressed = false;
 uint8_t uart2RxBuffer[1];
 uint32_t startDelayTick;
@@ -48,6 +49,7 @@ void setAlarmDateTime();
 void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromStandby();
+bool wakedUpFromPower();
 void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char *message);
 
 int alt_main()
@@ -58,6 +60,7 @@ int alt_main()
     sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
+    deviceWasWakedUpFromPower = wakedUpFromPower();
     buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     printDeviceInfo();
     ModemServiceResultStatus modemResultStatus;
@@ -67,10 +70,31 @@ int alt_main()
     if (deviceWasWakedUpFromStandby)
     {
         // TODO handle NRF IRQ, or alarm event
+        printf("Waked Up from stundby!\r\n");
+    }
+    else if (!deviceWasWakedUpFromPower)
+    {
+        //HAL_RTCEx_BKUPRead()
+        printf("Waked Up from reset!\r\n");
+        sensorsService.calibrateScales(buttonIsPressed);
     }
     else
     {
+        sensorsService.resetBackUpRegisters();
+        while (1)
+        {
+            for (uint8_t i = 0; i < 3; i++)
+            {
+                sensorsService.readSensors();
+                HAL_Delay(2000);
+            }
+        }
+        
+
+
         // TODO Check modem and power on if need
+        printf("Waked Up from power on!\r\n");
+        
         if (deviceIsMaster)
         {
             ledService.blinkGreenLed(0, 300);
@@ -294,18 +318,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-bool wakedUpFromStandby()
-{
-    return (PWR->CSR) & (PWR_CSR_SBF);
-}
-
 void printDeviceInfo()
 {
     printf("\r\n");
     printf("Bees Scale Device powered by Eugen Scobich\r\n");
     printf("Device Address: 0x%0X%0X%0X%0X%0X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
     printf("Device Mode: %s\r\n", deviceIsMaster ? "Master" : "Slave");
-    printf("Waked up from: %s\r\n", deviceWasWakedUpFromStandby ? "Standby" : "Power On");
+    printf("Waked up from: %s\r\n", deviceWasWakedUpFromStandby ? "Standby" : deviceWasWakedUpFromPower ? "Power On" : "Reset");
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 
@@ -380,4 +399,18 @@ void goToStandByMode()
     PWR->CSR |= PWR_CSR_EWUP;
     PWR->CR |= PWR_CR_CSBF;
     HAL_PWR_EnterSTANDBYMode();
+}
+
+bool wakedUpFromStandby()
+{
+    return (PWR->CSR) & (PWR_CSR_SBF);
+}
+
+bool wakedUpFromPower()
+{
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST)) {
+        __HAL_RCC_CLEAR_RESET_FLAGS();
+        return true;
+    }     
+    return false;
 }
