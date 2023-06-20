@@ -134,14 +134,13 @@ uint8_t* DS18B20::getRom()
 // #############################################################################################
 void DS18B20::waitForTemperatureRead()
 {
-    _setPinAsOutput();
     _high();
-    _ds18B20Delay(2);
+    _ds18B20Delay(1);
+    _setPinAsOutput();
     _low();
     _ds18B20Delay(1);
-    _high();
     _setPinAsInput();
-    _ds18B20Delay(10);
+    _ds18B20Delay(15);
     uint32_t tick = HAL_GetTick();
     while (HAL_GPIO_ReadPin(DS18B20_DT_GPIOx, DS18B20_DT_GPIO_Pin) == GPIO_PIN_RESET) {
         if (tick + 800 < HAL_GetTick())
@@ -192,7 +191,8 @@ uint8_t* DS18B20::getScratchpad() {
 bool DS18B20::readTemperature() {
     temperature = 0;
     write(0x44);
-    waitForTemperatureRead();
+    //waitForTemperatureRead();
+    HAL_Delay(800);
     start();
     if (readScratchpad()) {
         uint8_t lsByte = scratchpad[0];

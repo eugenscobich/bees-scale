@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <cstring>
 
-ModemService::ModemService(SIM800C* _sim800c, void(*_updateFunction)()) :
+ModemService::ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*_updateFunction)()) :
     sim800c(_sim800c),
+    sensorsService(_sensorsService),
     updateFunction(_updateFunction)
 {
 
@@ -378,7 +379,7 @@ ModemServiceResultStatus ModemService::deleteAllSMS() {
 
 ModemServiceResultStatus ModemService::waitForSettingsSMS() {
     printf("Wait for settings SMS\r\n");
-    sim800cResult = sim800c->waitForMessage("+CMTI: ", 60000);
+    sim800cResult = sim800c->waitForMessage("+CMTI: ", 65535);
     if (sim800cResult->status == SIM800C_SUCCESS) {
         ModemServiceResultStatus modemServiceResultStatus = findSMSWithSettingsAndConfigureModem();
         if (modemServiceResultStatus == MODEM_SUCCESS) {
@@ -494,4 +495,115 @@ void ModemService::_changeSim800CPwrPinToOuput() {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(SIM800C_PWR_GPIO_Port, &GPIO_InitStruct);
+}
+
+ModemServiceResultStatus ModemService::sendData() {
+
+
+    printf("Open GPRS context\r\n");
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=2,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=1,1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPINIT", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPPARA=\"CID\",1", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    char buff[100];
+    sprintf(buff, "AT+HTTPPARA=\"URL\",\"http://%s/api/v1/%s/telemetry\"", host, apiKey);
+    sim800cResult = sim800c->sendCmd(buff, "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPPARA=\"CONTENT\",\"application/json\"", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    char data[500] = {0};
+    strcat(data, "[");
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        if(sensorsService->getSensors()[i].isPresent) {
+            char sensorData[200];
+            sprintf(sensorData, "{\"id\"=\"%02X%02X%02X%02X%02X%02X%02X%02X\",\"tempOutside\"=\"%d.%02d\",\"weight\"=\"%d.%02d\",\"temp\"=\"%d.%02d\",\"humidity\"=\"%d.%02d\"}",
+                sensorsService->getSensors()[i].ds18b20->getRom()[0],
+                sensorsService->getSensors()[i].ds18b20->getRom()[1],
+                sensorsService->getSensors()[i].ds18b20->getRom()[2],
+                sensorsService->getSensors()[i].ds18b20->getRom()[3],
+                sensorsService->getSensors()[i].ds18b20->getRom()[4],
+                sensorsService->getSensors()[i].ds18b20->getRom()[5],
+                sensorsService->getSensors()[i].ds18b20->getRom()[6],
+                sensorsService->getSensors()[i].ds18b20->getRom()[7],
+                (uint8_t)(sensorsService->getSensors()[i].ds18b20->getTemperature()),
+                (uint8_t)(((uint8_t)(sensorsService->getSensors()[i].ds18b20->getTemperature() * 100)) % 100),
+                (uint32_t)(sensorsService->getSensors()[i].hx711->getWeight()), 
+                (uint8_t)(((uint32_t)(sensorsService->getSensors()[i].hx711->getWeight() * 100)) % 100),
+                100,
+                0,
+                50,
+                0
+            );
+            printf("Sensor: %d JSON data: %s\r\n", i, sensorData);
+            strcat(data, sensorData);
+            if (i < 2) {
+                strcat(data, ",");
+            }
+        } else {
+            printf("Sensor: %d is not present\r\n", i);
+        }
+    }
+    strcat(data, "]");
+    
+    sprintf(buff, "AT+HTTPDATA=%d,100000", strlen(data));
+    sim800cResult = sim800c->sendCmd(buff, "DOWNLOAD");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+    //printf("Data: %s\r\n", data);
+    sim800cResult = sim800c->sendCmd(data);
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPACTION=1", "+HTTPACTION: ", 10000, 0);
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(3, "+HTTPACTION: ", ",", ",", "\n");
+    if (findResult->results[1].found) {
+        printf("Response code: %d\r\n", (uint8_t)findResult->results[1].valueInt);
+    } else {
+        printf("Wasn't able to find response code\r\n");
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPREAD", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+
+    sim800cResult = sim800c->sendCmd("AT+HTTPTERM", "OK");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+   
+    sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
 }

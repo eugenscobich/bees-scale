@@ -8,7 +8,7 @@
 typedef struct {
     HX711 *hx711;
     DS18B20 *ds18b20;
-    float weight;
+    bool isPresent;
 } Sensor;
 
 class SensorsService {

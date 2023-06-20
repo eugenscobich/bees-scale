@@ -26,9 +26,9 @@ DS18B20 ds18B20_1(&htim1, HX711_DT_1_GPIO_Port, HX711_DT_1_Pin);
 DS18B20 ds18B20_2(&htim1, HX711_DT_2_GPIO_Port, HX711_DT_2_Pin);
 DS18B20 ds18B20_3(&htim1, HX711_DT_3_GPIO_Port, HX711_DT_3_Pin);
 
-
-ModemService modemService(&sim800c, &update);
 SensorsService sensorsService(&hx711_1, &hx711_2, &hx711_3, &ds18B20_1, &ds18B20_2, &ds18B20_3);
+ModemService modemService(&sim800c, &sensorsService, &update);
+
 LedService ledService;
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
@@ -54,6 +54,7 @@ void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const c
 
 int alt_main()
 {
+    buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     HAL_TIM_Base_Start(&htim1);
     nonBlockingDelay(100);
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
@@ -61,7 +62,6 @@ int alt_main()
     deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
     deviceWasWakedUpFromPower = wakedUpFromPower();
-    buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     printDeviceInfo();
     ModemServiceResultStatus modemResultStatus;
 
@@ -74,24 +74,11 @@ int alt_main()
     }
     else if (!deviceWasWakedUpFromPower)
     {
-        //HAL_RTCEx_BKUPRead()
         printf("Waked Up from reset!\r\n");
         sensorsService.calibrateScales(buttonIsPressed);
     }
     else
     {
-        sensorsService.resetBackUpRegisters();
-        while (1)
-        {
-            for (uint8_t i = 0; i < 3; i++)
-            {
-                sensorsService.readSensors();
-                HAL_Delay(2000);
-            }
-        }
-        
-
-
         // TODO Check modem and power on if need
         printf("Waked Up from power on!\r\n");
         
@@ -146,6 +133,14 @@ int alt_main()
                 modemResultStatus = modemService.configureDateAndTime();
                 handleModemResultStatus(modemResultStatus, "Wasn't able to configure date and time");
             }
+
+
+            if (modemResultStatus == MODEM_SUCCESS)
+            {
+                modemResultStatus = modemService.sendData();
+                handleModemResultStatus(modemResultStatus, "Wasn't able to send data");
+            }
+
 
             if (modemResultStatus != MODEM_SUCCESS)
             {

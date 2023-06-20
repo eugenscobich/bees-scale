@@ -2,12 +2,13 @@
 #define __MODEM_SERVICE_H__
 
 #include "SIM800C.h"
+#include "sensors_service.h"
 
 #define PHONE_NUMBER_MAX_LENGTH 20
 #define APN_MAX_LENGTH 20
 #define USER_MAX_LENGTH 20
 #define PWD_MAX_LENGTH 20
-#define API_KEY_MAX_LENGTH 20
+#define API_KEY_MAX_LENGTH 30
 #define HOST_MAX_LENGTH 20
 
 typedef enum {
@@ -24,6 +25,7 @@ class ModemService {
 
 private:
     SIM800C* sim800c;
+    SensorsService* sensorsService;
     void(*updateFunction)();
 
     SIM800CCmdResult* sim800cResult;
@@ -41,7 +43,7 @@ private:
     void _nonBlockingDelay(uint32_t delayInTicks);
     void _changeSim800CPwrPinToOuput();
 public:
-    ModemService(SIM800C* _sim800c, void(*updateFunction)());
+    ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*updateFunction)());
     bool isSIM800CPresent();
     ModemServiceResultStatus startModemIfNeed();
     ModemServiceResultStatus checkModemHealth();
@@ -50,6 +52,7 @@ public:
     ModemServiceResultStatus deleteAllSMS();
     ModemServiceResultStatus waitForSettingsSMS();
     ModemServiceResultStatus configureDateAndTime();
+    ModemServiceResultStatus sendData();
 
     void disablePowerOnPin();
     void enablePowerOnPin();

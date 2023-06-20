@@ -22,11 +22,13 @@ void SensorsService::readSensors()
     {
         printf("Sensor %d. Start read sensor\r\n", i);
         sensors[1].hx711->disable();
+        HAL_Delay(1);
         bool isSensorPresent = sensors[i].ds18b20->start();
         if (isSensorPresent)
         {
             if (sensors[i].ds18b20->readRom())
             {
+                sensors[i].isPresent = true;
                 if (sensors[i].ds18b20->readTemperature())
                 {
                     printf("Sensor %d. Temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].ds18b20->getTemperature()), (uint16_t)(((uint16_t)(sensors[i].ds18b20->getTemperature() * 100)) % 100));
