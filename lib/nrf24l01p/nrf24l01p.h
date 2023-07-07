@@ -16,6 +16,12 @@ typedef enum {
     NRF24L01p_250KBPS
 } NRF24L01pDataRateEnum;
 
+typedef enum {
+    NRF24L01p_minus_18dBm = 0,
+    NRF24L01p_minus_12dBm,
+    NRF24L01p_minus_6dBm,
+    NRF24L01p_0dBm
+} NRF24L01pRxPowerEnum;
 
 class NRF24L01p {
 
@@ -108,7 +114,8 @@ public:
     void printRegister(uint8_t reg);
     void printAllRegisters();
     void setRetries(uint8_t delay, uint8_t count);
-    bool setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate);
+    bool setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate);
+    bool setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum);
     void setPayloadSize(uint8_t size);
 };
 

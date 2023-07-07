@@ -128,6 +128,7 @@ void NRF24L01p::init() {
     reset();  
     setRetries(5, 15);
     setDataRate(NRF24L01p_1MBPS);
+    setRxPowerRate(NRF24L01p_0dBm);
     setPayloadSize(32);
     writeRegister(STATUS, _BV(STATUS_RX_DR_6) | _BV(STATUS_TX_DS_5) | _BV(STATUS_MAX_RT_4));
     sendCommand(FLUSH_RX);
@@ -161,8 +162,14 @@ void NRF24L01p::setRetries(uint8_t delay, uint8_t count) {
 
 bool NRF24L01p::setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate) {
     uint8_t rfSetup = readRegister(RF_SETUP);
-
-    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_HIGH_3)));
+    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_LOW_5))); // remove bit
+    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_HIGH_3))); // remove bit
+    if (NRF24L01pDataRate == NRF24L01p_250KBPS) {
+        rfSetup = static_cast<uint8_t>(rfSetup | (_BV(RF_SETUP_RF_DR_LOW_5))); // set bit
+    } else if (NRF24L01pDataRate == NRF24L01p_2MBPS) {
+        rfSetup = static_cast<uint8_t>(rfSetup | (_BV(RF_SETUP_RF_DR_HIGH_3)));
+    }
+    
     writeRegister(RF_SETUP, rfSetup);
 
     // Verify our result
@@ -172,6 +179,26 @@ bool NRF24L01p::setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate) {
     return false;
 }
 
+bool NRF24L01p::setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum) {
+    uint8_t rfSetup = readRegister(RF_SETUP);
+    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_PWR_2))); // remove bit
+    rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_PWR_1))); // remove bit
+    if (nrf24L01pRxPowerEnum == NRF24L01p_0dBm) {
+        rfSetup = static_cast<uint8_t>(rfSetup | _BV(RF_SETUP_RF_PWR_2) | _BV(RF_SETUP_RF_PWR_1)); // set bit
+    } else if (nrf24L01pRxPowerEnum == NRF24L01p_minus_6dBm) {
+        rfSetup = static_cast<uint8_t>(rfSetup | _BV(RF_SETUP_RF_PWR_2));
+    } else if (nrf24L01pRxPowerEnum == NRF24L01p_minus_12dBm) {
+        rfSetup = static_cast<uint8_t>(rfSetup | _BV(RF_SETUP_RF_PWR_1));
+    }
+    
+    writeRegister(RF_SETUP, rfSetup);
+
+    // Verify our result
+    if (readRegister(RF_SETUP) == rfSetup) {
+        return true;
+    }
+    return false;
+}
 
 void NRF24L01p::reset() {
     // Reset pins
@@ -183,7 +210,7 @@ void NRF24L01p::reset() {
     writeRegister(SETUP_AW, 0x03); // 5 byte address
     writeRegister(SETUP_RETR, 0x03); // 250uS retransmit intervals and 3 max retranmitions
     writeRegister(RF_CH, 0x02); // Channel nr 2
-    writeRegister(RF_SETUP, 0x07); // 2Mbits and -18dBm
+    writeRegister(RF_SETUP, 0x08); // 2Mbits and -18dBm
     writeRegister(STATUS, 0x7E); // Reset 
     uint8_t rxAddress0[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
     writeRegister(RX_ADDR_P0, rxAddress0, 5); // Receive Address pipe 0

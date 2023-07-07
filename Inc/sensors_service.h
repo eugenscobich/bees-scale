@@ -19,6 +19,7 @@ private:
 public:
     SensorsService(HX711 *hx711_1, HX711 *hx711_2, HX711 *hx711_3, DS18B20 *ds18b20_1, DS18B20 *ds18b20_2, DS18B20 *ds18b20_3);
     void readSensors();
+    void readSensors(uint8_t i);
 
     Sensor* getSensors();
     void calibrateScales(bool buttonIsPressed);

@@ -169,7 +169,7 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(uint8_t numberOfArguments, 
                 sim800cFindInRxBufferResult.results[i].found = true;
                 sim800cFindInRxBufferResult.results[i].value = previousFoundFromMessage + strlen(fromMessage);
                 sim800cFindInRxBufferResult.results[i].length = endIndex - startIndex;   
-                sim800cFindInRxBufferResult.results[i].valueInt = _charArray2int(sim800cFindInRxBufferResult.results[i].value, sim800cFindInRxBufferResult.results[i].length);
+                sim800cFindInRxBufferResult.results[i].valueInt = charArray2int(sim800cFindInRxBufferResult.results[i].value, sim800cFindInRxBufferResult.results[i].length);
                 previousFoundFromMessage = foundToMessage;
                 fromMessage = toMessage;
             } else {
@@ -185,7 +185,7 @@ SIM800CFindInRxBufferResult* SIM800C::findInRxBuffer(uint8_t numberOfArguments, 
 }
 
 
-uint32_t SIM800C::_charArray2int (const char* array, uint8_t length) {    
+uint32_t SIM800C::charArray2int (const char* array, uint8_t length) {    
     uint32_t number = 0;
     uint32_t mult = 1;
     for (uint8_t i = length; i > 0; i--) {

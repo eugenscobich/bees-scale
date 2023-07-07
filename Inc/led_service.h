@@ -19,6 +19,7 @@ public:
     void update();
     void blinkGreenLed(uint8_t numberOfBlinks = 0, uint16_t intervalInTicks = 200, uint16_t pouseIntervalInTicks = 2000);
     void stopBlinkGreenLed();
+    void blinkGreenRedOrangeLedOneTime();
 };
 
 #endif /* __LED_SERVICE_H__ */

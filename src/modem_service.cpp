@@ -254,27 +254,28 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
             PWD=""
             API_KEY="sdfjs3k5464n352kl679518i91nl"
             HOST="google.com"
+            REFRESH=30m
             */
             const char* apnPrefix = "APN=\"";
             const char* apnStart = strstr(settingsSMSMessage + strlen(smsTitle), apnPrefix);
             const char* apnEnd = strstr(apnStart + strlen(apnPrefix), "\"");
             uint8_t apnLength = apnEnd - (apnStart + strlen(apnPrefix));
             strncpy(apn, apnStart + strlen(apnPrefix), apnLength > APN_MAX_LENGTH ? APN_MAX_LENGTH : apnLength);
-            printf("Found APN:%s\r\n", apn);
+            printf("Found APN: %s\r\n", apn);
 
             const char* apiKeyPrefix = "API_KEY=\"";
             const char* apiKeyStart = strstr(settingsSMSMessage + strlen(smsTitle), apiKeyPrefix);
             const char* apiKeyEnd = strstr(apiKeyStart + strlen(apiKeyPrefix), "\"");
             uint8_t apiKeyLength = apiKeyEnd - (apiKeyStart + strlen(apiKeyPrefix));
             strncpy(apiKey, apiKeyStart + strlen(apiKeyPrefix), apiKeyLength > API_KEY_MAX_LENGTH ? API_KEY_MAX_LENGTH : apiKeyLength);
-            printf("Found API_KEY:%s\r\n", apiKey);
+            printf("Found API_KEY: %s\r\n", apiKey);
 
             const char* hostPrefix = "HOST=\"";
             const char* hostStart = strstr(settingsSMSMessage + strlen(smsTitle), hostPrefix);
             const char* hostEnd = strstr(hostStart + strlen(hostPrefix), "\"");
             uint8_t hostLength = hostEnd - (hostStart + strlen(hostPrefix));
             strncpy(host, hostStart + strlen(hostPrefix), hostLength > HOST_MAX_LENGTH ? HOST_MAX_LENGTH : hostLength);
-            printf("Found HOST:%s\r\n", host);
+            printf("Found HOST: %s\r\n", host);
 
             const char* userPrefix = "USER=\"";
             const char* userStart = strstr(settingsSMSMessage + strlen(smsTitle), userPrefix);
@@ -282,7 +283,7 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
                 const char* userEnd = strstr(userStart + strlen(userPrefix), "\"");
                 uint8_t userLength = userEnd - (userStart + strlen(userPrefix));
                 strncpy(user, userStart + strlen(userPrefix), userLength > USER_MAX_LENGTH ? USER_MAX_LENGTH : userLength);
-                printf("Found USER:%s\r\n", user);
+                printf("Found USER: %s\r\n", user);
             }
 
             const char* pwdPrefix = "PWD=\"";
@@ -291,7 +292,16 @@ ModemServiceResultStatus ModemService::findSMSWithSettingsAndConfigureModem() {
                 const char* pwdEnd = strstr(pwdStart + strlen(pwdPrefix), "\"");
                 uint8_t pwdLength = pwdEnd - (pwdStart + strlen(pwdPrefix));
                 strncpy(pwd, pwdStart + strlen(pwdPrefix), pwdLength > PWD_MAX_LENGTH ? PWD_MAX_LENGTH : pwdLength);
-                printf("Found PWD:%s\r\n", pwd);
+                printf("Found PWD: %s\r\n", pwd);
+            }
+
+            const char* refreshPrefix = "REFRESH=\"";
+            const char* refreshStart = strstr(settingsSMSMessage + strlen(smsTitle), refreshPrefix);
+            if (refreshStart) {
+                const char* refreshEnd = strstr(refreshStart + strlen(refreshPrefix), "m\"");
+                uint8_t refreshLength = refreshEnd - (refreshStart + strlen(refreshPrefix));
+                refreshIntervalInMinutes = sim800c->charArray2int(refreshStart, refreshLength);
+                printf("Found REFRESH: %d min\r\n", refreshIntervalInMinutes);
             }
             break;
         } else {
@@ -497,9 +507,17 @@ void ModemService::_changeSim800CPwrPinToOuput() {
     HAL_GPIO_Init(SIM800C_PWR_GPIO_Port, &GPIO_InitStruct);
 }
 
-ModemServiceResultStatus ModemService::sendData() {
+uint8_t ModemService::getBatteryLevel() {
+    return batteryLevel;
+}
+
+uint16_t ModemService::getRefreshIntervalInMinutes() {
+    return refreshIntervalInMinutes;
+}
 
 
+
+ModemServiceResultStatus ModemService::sendData(uint8_t sensorData[][32]) {
     printf("Open GPRS context\r\n");
 
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
@@ -541,27 +559,33 @@ ModemServiceResultStatus ModemService::sendData() {
     for (uint8_t i = 0; i < 3; i++)
     {
         if(sensorsService->getSensors()[i].isPresent) {
-            char sensorData[200];
-            sprintf(sensorData, "{\"id\"=\"%02X%02X%02X%02X%02X%02X%02X%02X\",\"tempOutside\"=\"%d.%02d\",\"weight\"=\"%d.%02d\",\"temp\"=\"%d.%02d\",\"humidity\"=\"%d.%02d\"}",
-                sensorsService->getSensors()[i].ds18b20->getRom()[0],
-                sensorsService->getSensors()[i].ds18b20->getRom()[1],
-                sensorsService->getSensors()[i].ds18b20->getRom()[2],
-                sensorsService->getSensors()[i].ds18b20->getRom()[3],
-                sensorsService->getSensors()[i].ds18b20->getRom()[4],
-                sensorsService->getSensors()[i].ds18b20->getRom()[5],
-                sensorsService->getSensors()[i].ds18b20->getRom()[6],
-                sensorsService->getSensors()[i].ds18b20->getRom()[7],
-                (uint8_t)(sensorsService->getSensors()[i].ds18b20->getTemperature()),
-                (uint8_t)(((uint8_t)(sensorsService->getSensors()[i].ds18b20->getTemperature() * 100)) % 100),
-                (uint32_t)(sensorsService->getSensors()[i].hx711->getWeight()), 
-                (uint8_t)(((uint32_t)(sensorsService->getSensors()[i].hx711->getWeight() * 100)) % 100),
-                100,
-                0,
-                50,
-                0
+            char sensorDataJson[200];
+            sprintf(sensorDataJson, "{\"id\"=\"%02X%02X%02X%02X%02X%02X%02X%02X\",\"tempOutside\"=\"%d.%02d\",\"weight\"=\"%d.%02d\",\"temp\"=\"%d.%02d\",\"humidity\"=\"%d.%02d\",\"bat\"=\"%d\"}",
+                sensorData[i][0],
+                sensorData[i][1],
+                sensorData[i][2],
+                sensorData[i][3],
+                sensorData[i][4],
+                sensorData[i][5],
+                sensorData[i][6],
+                sensorData[i][7],
+                //tempOutside
+                sensorData[i][8],
+                sensorData[i][9],
+                //weight
+                sensorData[i][10],
+                sensorData[i][11],
+                //temp
+                sensorData[i][12],
+                sensorData[i][13],
+                //humidity
+                sensorData[i][14],
+                sensorData[i][15],
+                //battery
+                sensorData[i][16]
             );
-            printf("Sensor: %d JSON data: %s\r\n", i, sensorData);
-            strcat(data, sensorData);
+            printf("Sensor: %d JSON data: %s\r\n", i, sensorDataJson);
+            strcat(data, sensorDataJson);
             if (i < 2) {
                 strcat(data, ",");
             }
@@ -606,4 +630,13 @@ ModemServiceResultStatus ModemService::sendData() {
     }
    
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
+    return MODEM_SUCCESS;
+}
+
+ModemServiceResultStatus ModemService::powerDown() {
+    sim800cResult = sim800c->sendCmd("AT+CPOWD=1", "NORMAL POWER DOWN");
+    if (sim800cResult->status != SIM800C_SUCCESS) {
+        return MODEM_ERROR;
+    }
+    return MODEM_SUCCESS;
 }

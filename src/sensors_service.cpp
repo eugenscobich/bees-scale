@@ -16,48 +16,52 @@ SensorsService::SensorsService(HX711 *hx711_1, HX711 *hx711_2, HX711 *hx711_3, D
     sensors[2].ds18b20 = ds18b20_3;
 }
 
-void SensorsService::readSensors()
-{
-    for (uint8_t i = 0; i < 3; i++)
+void SensorsService::readSensors(uint8_t i) {
+    printf("Sensor %d. Start read sensor\r\n", i);
+    sensors[1].hx711->disable();
+    HAL_Delay(1);
+    bool isSensorPresent = sensors[i].ds18b20->start();
+    if (isSensorPresent)
     {
-        printf("Sensor %d. Start read sensor\r\n", i);
-        sensors[1].hx711->disable();
-        HAL_Delay(1);
-        bool isSensorPresent = sensors[i].ds18b20->start();
-        if (isSensorPresent)
+        if (sensors[i].ds18b20->readRom())
         {
-            if (sensors[i].ds18b20->readRom())
+            sensors[i].isPresent = true;
+            if (sensors[i].ds18b20->readTemperature())
             {
-                sensors[i].isPresent = true;
-                if (sensors[i].ds18b20->readTemperature())
+                printf("Sensor %d. Temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].ds18b20->getTemperature()), (uint16_t)(((uint16_t)(sensors[i].ds18b20->getTemperature() * 100)) % 100));
+                int16_t coeficientInt = sensors[i].ds18b20->getScratchpad()[2] << 8 | sensors[i].ds18b20->getScratchpad()[3];
+                printf("Sensor %d. Found coeficient int: %d\r\n", i, coeficientInt);
+                if (coeficientInt != 0)
                 {
-                    printf("Sensor %d. Temperature: %d.%02d\r\n", i, (uint16_t)(sensors[i].ds18b20->getTemperature()), (uint16_t)(((uint16_t)(sensors[i].ds18b20->getTemperature() * 100)) % 100));
-                    int16_t coeficientInt = sensors[i].ds18b20->getScratchpad()[2] << 8 | sensors[i].ds18b20->getScratchpad()[3];
-                    printf("Sensor %d. Found coeficient int: %d\r\n", i, coeficientInt);
-                    if (coeficientInt != 0)
-                    {
-                        float coeficient = coeficientInt / 100.0;
-                        sensors[i].hx711->setCoeficient(coeficient);
-                    }
-                    sensors[i].hx711->powerUp();
-                    sensors[i].hx711->readRawValue(1);
-                    printf("Sensor %d. Raw value: %d\r\n", i, sensors[i].hx711->getRawValue());
-                    printf("Sensor %d. Weight: %d.%02d\r\n", i, (uint32_t)(sensors[i].hx711->getWeight()), (uint8_t)(((uint32_t)(sensors[i].hx711->getWeight() * 100)) % 100));
+                    float coeficient = coeficientInt / 100.0;
+                    sensors[i].hx711->setCoeficient(coeficient);
                 }
-                else
-                {
-                    printf("Sensor %d. Could not read temperature\r\n", i);
-                }
+                sensors[i].hx711->powerUp();
+                sensors[i].hx711->readRawValue(1);
+                printf("Sensor %d. Raw value: %d\r\n", i, sensors[i].hx711->getRawValue());
+                printf("Sensor %d. Weight: %d.%02d\r\n", i, (uint32_t)(sensors[i].hx711->getWeight()), (uint8_t)(((uint32_t)(sensors[i].hx711->getWeight() * 100)) % 100));
             }
             else
             {
-                printf("Sensor %d. Could not read Rom\r\n", i);
+                printf("Sensor %d. Could not read temperature\r\n", i);
             }
         }
         else
         {
-            printf("Sensor %d. Temperature sensor is not present\r\n", i);
+            printf("Sensor %d. Could not read Rom\r\n", i);
         }
+    }
+    else
+    {
+        printf("Sensor %d. Temperature sensor is not present\r\n", i);
+    }
+}
+
+void SensorsService::readSensors()
+{
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        readSensors(i);
     }
 }
 

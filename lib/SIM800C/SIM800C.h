@@ -65,7 +65,7 @@ private:
     SIM800CCmdResult* _waitForMessage(const char *message, uint16_t waitTimeout, uint8_t numberOfRetries);
     SIM800CCmdResult* _sendCmd(const char *cmd);
     SIM800CCmdResult* _sendCmd(const char *cmd, const char *expectedResponse, uint16_t receiveTimeout, uint8_t numberOfRetries);
-    uint32_t _charArray2int (const char *array, uint8_t n);
+    
 
 public:
 
@@ -80,6 +80,7 @@ public:
     SIM800CCmdResult* waitForMessage(const char *message, uint16_t waitTimeout);
 
     SIM800CFindInRxBufferResult* findInRxBuffer(uint8_t numberOfArguments, const char* from, ...);
+    uint32_t charArray2int (const char *array, uint8_t n);
 };
 
 #endif // __SIM800C_H__

@@ -40,6 +40,7 @@ private:
     char pwd[PWD_MAX_LENGTH + 1];
     char apiKey[API_KEY_MAX_LENGTH + 1];
     char host[HOST_MAX_LENGTH + 1];
+    uint16_t refreshIntervalInMinutes;
     void _nonBlockingDelay(uint32_t delayInTicks);
     void _changeSim800CPwrPinToOuput();
 public:
@@ -52,7 +53,11 @@ public:
     ModemServiceResultStatus deleteAllSMS();
     ModemServiceResultStatus waitForSettingsSMS();
     ModemServiceResultStatus configureDateAndTime();
-    ModemServiceResultStatus sendData();
+    ModemServiceResultStatus sendData(uint8_t sensorData[][32]);
+    ModemServiceResultStatus powerDown();
+
+    uint16_t getRefreshIntervalInMinutes() ;
+    uint8_t getBatteryLevel();
 
     void disablePowerOnPin();
     void enablePowerOnPin();
