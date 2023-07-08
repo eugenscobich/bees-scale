@@ -92,6 +92,14 @@ public:
     bool isInRxMode();
 
     void setTxMode();
+    void setRxMode();
+
+    void disableIRQForTx();
+    void disableIRQForRx();
+    void disableIRQForMaxRetry();
+    void enableIRQForTx();
+    void enableIRQForRx();
+    void enableIRQForMaxRetry();
 
     // Check if data is available
     bool isDataAvailable();

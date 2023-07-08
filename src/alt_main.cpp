@@ -14,6 +14,7 @@
 #include "led_service.h"
 #include "sensors_service.h"
 #include "radio_service.h"
+#include "time_service.h"
 #include <stdio.h>
 
 #define NRF_CHANNEL 100
@@ -41,6 +42,7 @@ ModemService modemService(&sim800c, &sensorsService, &update);
 RadioService radioService(&nRF24L01p, &sensorsService, &update);
 
 LedService ledService;
+TimeService timeService;
 
 const uint8_t deviceAddress[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
@@ -48,7 +50,6 @@ uint8_t data[32] = {0};
 uint8_t sensorData[3][32] = {0};
 
 bool deviceIsMaster = false;
-bool deviceWasWakedUpFromA0 = false;
 bool deviceWasWakedUpFromStandby = false;
 bool deviceWasWakedUpFromPower = false;
 bool buttonIsPressed = false;
@@ -57,15 +58,14 @@ uint32_t startDelayTick;
 
 void nonBlockingDelay(uint32_t delayInTicks);
 void printDeviceInfo();
-void setLocalDateTime();
-void setAlarmDateTime();
-void handleReceiveDataEvent();
 void goToStandByMode();
 bool wakedUpFromA0();
 bool wakedUpFromStandby();
 bool wakedUpFromPower();
+bool wakedUpFromPinReset();
+bool wakedUpFromSoftware();
 void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char *message);
-void populateSensorsData(uint8_t i);
+void readSensorAndPopulateData(uint8_t i);
 void sendData(uint8_t i);
 uint8_t getSlaveBatteryLevel();
 
@@ -77,164 +77,290 @@ int alt_main()
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
     sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
-    deviceWasWakedUpFromA0 = wakedUpFromA0();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
     deviceWasWakedUpFromPower = wakedUpFromPower();
     printDeviceInfo();
     ModemServiceResultStatus modemResultStatus;
 
-    //sensorsService.readSensors();
-
-    if (deviceWasWakedUpFromA0)
+    // ================ Sandbox
+    if (deviceIsMaster)
     {
-        // TODO handle NRF IRQ, or alarm event
-        printf("Waked Up from A0!\r\n");
-        if (deviceIsMaster)
+        nRF24L01p.init();
+        nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+        nRF24L01p.printAllRegisters();
+        data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
+        bool successSendCmd = nRF24L01p.write(data);
+        if (successSendCmd)
         {
+            printf("Successful sent the message\r\n");
+
+            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+            nRF24L01p.printAllRegisters();
+            startDelayTick = HAL_GetTick();
+            while (true)
+            {
+                if (nRF24L01p.isDataAvailable())
+                {
+                    nRF24L01p.receive(data);
+                    printf("Slave 1, Sensor 1 details was received successful: 0x%02X%02X%02X\r\n", data[0], data[1], data[2]);
+                    break;
+                }
+                else if (startDelayTick + 10000 < HAL_GetTick())
+                {
+                    printf("Slave 1, Sensor 1 wasn't retrieved in time. It seems Salve is not accepting requests\r\n");
+                    break;
+                }
+            }
         }
         else
         {
-            if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode()) {
-                printf("It seems we were waked up by NRF IRQ\r\n");
+            printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+        }
+    }
+    else
+    {
+        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
+        {
+            if (nRF24L01p.isDataAvailable())
+            {
+                nRF24L01p.receive(data);
+                printf("Recieved CMD: 0x%02X\r\n", data[0]);
+                nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                nRF24L01p.printAllRegisters();
+                for (uint8_t i = 0; i < 32; i++)
+                {
+                    data[i] = 1;
+                }
+                bool successSendCmd = nRF24L01p.write(data);
+                if (successSendCmd)
+                {
+                    printf("Successful sent sensor data!\r\n");
+                }
+                nRF24L01p.powerDown();
+            }
+            else
+            {
+                printf("NRF is UP but there is no data!\r\n");
+            }
+        } else {
+            printf("Init NRF\r\n");
+            nRF24L01p.init();
+            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+            nRF24L01p.printAllRegisters();
+            goToStandByMode();
+        }
+    }
+    HAL_Delay(5000);
+    goToStandByMode();
+    // =====================================  Sandbox
+
+    if (deviceWasWakedUpFromStandby)
+    {
+        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
+        {
+            // TODO handle NRF IRQ, or alarm event
+            printf("Waked Up by NRF\r\n");
+            if (deviceIsMaster)
+            {
+                printf("Waked Up from NRF, but we are master, this is not expected!\r\n");
+            }
+            else
+            {
+                if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
+                {
+                    printf("It seems we were waked up by NRF IRQ\r\n");
                 waitForNextCommand:
-                while (true) {
-                    if (nRF24L01p.isDataAvailable()) {
-                        nRF24L01p.receive(data);
-                        if (data[0] == NRF_SEND_SENSOR_1_DATA_CMD) {
-                            populateSensorsData(0);
-                            sendData(0);
-                            goto waitForNextCommand;
-                        } else if (data[0] == NRF_SEND_SENSOR_2_DATA_CMD) {
-                            populateSensorsData(1);
-                            sendData(1);
-                            goto waitForNextCommand;
-                        } else if (data[0] == NRF_SEND_SENSOR_3_DATA_CMD) {
-                            populateSensorsData(2);
-                            sendData(2);
-                            goto waitForNextCommand;
-                        } else if (data[0] == NRF_SEND_GO_TO_SLEEP_CMD) {
-                            nRF24L01p.powerDown();
-                            setLocalDateTime();
-                            setAlarmDateTime();
-                            goToStandByMode();
+                    while (true)
+                    {
+                        if (nRF24L01p.isDataAvailable())
+                        {
+                            nRF24L01p.receive(data);
+                            if (data[0] == NRF_SEND_SENSOR_1_DATA_CMD)
+                            {
+                                readSensorAndPopulateData(0);
+                                sendData(0);
+                                goto waitForNextCommand;
+                            }
+                            else if (data[0] == NRF_SEND_SENSOR_2_DATA_CMD)
+                            {
+                                readSensorAndPopulateData(1);
+                                sendData(1);
+                                goto waitForNextCommand;
+                            }
+                            else if (data[0] == NRF_SEND_SENSOR_3_DATA_CMD)
+                            {
+                                readSensorAndPopulateData(2);
+                                sendData(2);
+                                goto waitForNextCommand;
+                            }
+                            else if (data[0] == NRF_SEND_GO_TO_SLEEP_CMD)
+                            {
+                                nRF24L01p.powerDown();
+                                timeService.setDateAndTime(data);
+                                timeService.setAlarmTime(data);
+                                goToStandByMode();
+                            }
                         }
                     }
                 }
-            } else {
-                printf("Waked Up from A0 and NRF doesn't have any data.\r\n");
-            }
-        }
-    }
-    else if (deviceWasWakedUpFromStandby) {
-        // TODO handle NRF IRQ, or alarm event
-        printf("Waked Up from stundby/Alarm!\r\n");
-        if (deviceIsMaster)
-        {
-            printf("We are master let's start GSM, send master data and then send each slave data\r\n");
-
-            ledService.blinkGreenLed(0, 300);
-            
-            modemResultStatus = modemService.startModemIfNeed();
-            modemResultStatus = modemService.checkModemHealth();
-            modemService.disablePowerOnPin();
-            modemResultStatus = modemService.configureModem();
-            modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
-
-            sensorsService.readSensors();
-            populateSensorsData(0);
-            populateSensorsData(1);
-            populateSensorsData(2);
-
-            modemResultStatus = modemService.sendData(sensorData);
-
-            nRF24L01p.init();
-            nRF24L01p.setTxMode();
-            nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-            data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
-            nRF24L01p.write(data);
-            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
-            while (true)
-            {
-                if (nRF24L01p.isDataAvailable()) {
-                    nRF24L01p.receive(sensorData[0]);
-                    break;
+                else
+                {
+                    printf("Waked Up by NRF and it doesn't have any data.\r\n");
                 }
             }
-
-            nRF24L01p.setTxMode();
-            nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-            data[0] = NRF_SEND_SENSOR_2_DATA_CMD;
-            nRF24L01p.write(data);
-            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
-            while (true)
-            {
-                if (nRF24L01p.isDataAvailable()) {
-                    nRF24L01p.receive(sensorData[1]);
-                    break;
-                }
-            }
-
-            nRF24L01p.setTxMode();
-            nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-            data[0] = NRF_SEND_SENSOR_3_DATA_CMD;
-            nRF24L01p.write(data);
-            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
-            while (true)
-            {
-                if (nRF24L01p.isDataAvailable()) {
-                    nRF24L01p.receive(sensorData[2]);
-                    break;
-                }
-            }
-
-            nRF24L01p.setTxMode();
-            nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-            data[0] = NRF_SEND_GO_TO_SLEEP_CMD;
-
-
-            RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
-            // date
-            data[1] = localDate.Month;
-            data[2] = localDate.Date;
-            data[3] = localDate.Year;
-
-            RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-            // time
-            data[4] = localTime.Hours;
-            data[5] = localTime.Minutes;
-            data[6] = localTime.Seconds;
-
-            // alarm
-            data[7] = localTime.Hours;
-            data[8] = localTime.Minutes;
-            data[9] = localTime.Seconds;
-
-            uint16_t minutes = modemService.getRefreshIntervalInMinutes();
-            data[7] += minutes / 60;
-            data[8] += minutes % 60;
-
-            if (data[8] >= 60) {
-                data[8] -= 60;
-                data[7] += 1;
-            }
-            if (data[7] >= 24) {
-                data[7] -= 24;
-            }
-
-            nRF24L01p.write(data);
-            nRF24L01p.powerDown();
-
-            modemResultStatus = modemService.sendData(sensorData);
-            modemService.powerDown();
-            setAlarmDateTime();
-            goToStandByMode();
         }
         else
         {
-            printf("We are slave, enable radio and go to sleep to wait commands!\r\n");
-            nRF24L01p.init();
-            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-            goToStandByMode();
+            printf("Waked Up by Alarm!\r\n");
+            if (deviceIsMaster)
+            {
+                printf("We are master let's start GSM, send master data and then send each slave data\r\n");
+
+                ledService.blinkGreenLed(0, 300);
+
+                modemResultStatus = modemService.startModemIfNeed();
+                modemResultStatus = modemService.checkModemHealth();
+                modemService.disablePowerOnPin();
+                modemResultStatus = modemService.configureModem();
+                modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+
+                readSensorAndPopulateData(0);
+                readSensorAndPopulateData(1);
+                readSensorAndPopulateData(2);
+
+                modemResultStatus = modemService.sendData(sensorData);
+                printf("Master data was sent successful\r\n");
+
+                printf("Ask Slave 1, Sensor one details.\r\n");
+                bool slave1IsPrezent = false;
+                nRF24L01p.init();
+                nRF24L01p.setTxMode();
+                nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                nRF24L01p.printAllRegisters();
+                data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
+                bool successSendCmd = nRF24L01p.write(data);
+                if (successSendCmd)
+                {
+                    nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                    nRF24L01p.printAllRegisters();
+                    startDelayTick = HAL_GetTick();
+                    while (true)
+                    {
+                        if (nRF24L01p.isDataAvailable())
+                        {
+                            nRF24L01p.receive(sensorData[0]);
+                            slave1IsPrezent = true;
+                            printf("Slave 1, Sensor 1 details was received successful\r\n");
+                            break;
+                        }
+                        else if (startDelayTick + 1000 < HAL_GetTick())
+                        {
+                            printf("Slave 1, Sensor 1 wasn't retrieved in time. It seems Salve is not accepting requests\r\n");
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+                }
+                if (slave1IsPrezent)
+                {
+                    nRF24L01p.setTxMode();
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    data[0] = NRF_SEND_SENSOR_2_DATA_CMD;
+                    bool successSendCmd = nRF24L01p.write(data);
+                    if (successSendCmd)
+                    {
+                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                        startDelayTick = HAL_GetTick();
+                        while (true)
+                        {
+                            if (nRF24L01p.isDataAvailable())
+                            {
+                                nRF24L01p.receive(sensorData[1]);
+                                printf("Slave 1, Sensor 2 details was received successful\r\n");
+                                break;
+                            }
+                            else if (startDelayTick + 1000 < HAL_GetTick())
+                            {
+                                slave1IsPrezent = false;
+                                printf("Slave 1, Sensor 2 wasn't retrieved in time. It seems Salve is not accepting requests\r\n");
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+                    }
+                }
+                if (slave1IsPrezent)
+                {
+                    nRF24L01p.setTxMode();
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    data[0] = NRF_SEND_SENSOR_3_DATA_CMD;
+                    bool successSendCmd = nRF24L01p.write(data);
+                    if (successSendCmd)
+                    {
+                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                        startDelayTick = HAL_GetTick();
+                        while (true)
+                        {
+                            if (nRF24L01p.isDataAvailable())
+                            {
+                                nRF24L01p.receive(sensorData[2]);
+                                printf("Slave 1, Sensor 3 details was received successful\r\n");
+                                break;
+                            }
+                            else if (startDelayTick + 1000 < HAL_GetTick())
+                            {
+                                slave1IsPrezent = false;
+                                printf("Slave 1, Sensor 3 wasn't retrieved in time. It seems Salve is not accepting requests\r\n");
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+                    }
+                }
+                if (slave1IsPrezent)
+                {
+                    nRF24L01p.setTxMode();
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    data[0] = NRF_SEND_GO_TO_SLEEP_CMD;
+                    timeService.populateDataWithDateAndTime(data);
+                    uint16_t minutes = modemService.getRefreshIntervalInMinutes();
+                    timeService.populateDataWithAlarmTimeFor(data, minutes, MINUTES);
+                    bool successSendCmd = nRF24L01p.write(data);
+                    if (!successSendCmd)
+                    {
+                        printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+                    }
+                    nRF24L01p.powerDown();
+                }
+                if (slave1IsPrezent)
+                {
+                    modemResultStatus = modemService.sendData(sensorData);
+                }
+                else
+                {
+                    printf("Slave 1 isn't prezent. data is not sent.\r\n");
+                }
+                modemService.powerDown();
+                timeService.setAlarmFor(30, SECONDS);
+                goToStandByMode();
+            }
+            else
+            {
+                printf("We are slave, enable radio and go to sleep to wait commands!\r\n");
+                nRF24L01p.init();
+                nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                nRF24L01p.printAllRegisters();
+                goToStandByMode();
+            }
         }
     }
     else if (!deviceWasWakedUpFromPower)
@@ -297,31 +423,14 @@ int alt_main()
                 handleModemResultStatus(modemResultStatus, "Wasn't able to configure date and time");
             }
 
-            RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-            // alarm
-            data[7] = localTime.Hours;
-            data[8] = localTime.Minutes;
-            data[9] = localTime.Seconds;
-
-            data[9] += 4;
-            if (data[9] >= 60) {
-                data[9] -= 60;
-                data[8] += 1;
-            }
-            if (data[8] >= 60) {
-                data[8] -= 60;
-                data[7] += 1;
-            }
-            if (data[7] >= 24) {
-                data[7] -= 24;
-            }
-            setAlarmDateTime();
+            timeService.setAlarmFor(20, SECONDS);
             goToStandByMode();
         }
         else
         {
             nRF24L01p.init();
             nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+            nRF24L01p.printAllRegisters();
             goToStandByMode();
         }
     }
@@ -332,13 +441,14 @@ int alt_main()
     }
 }
 
-uint8_t getSlaveBatteryLevel() {
+uint8_t getSlaveBatteryLevel()
+{
 
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
     HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 1000); // poll for conversion 
-    uint32_t value = HAL_ADC_GetValue(&hadc1); // get the adc value 
-    HAL_ADC_Stop(&hadc1); // stop adc
+    HAL_ADC_PollForConversion(&hadc1, 1000);   // poll for conversion
+    uint32_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
+    HAL_ADC_Stop(&hadc1);                      // stop adc
     /*
     BAT      					4.2		3.2
     50
@@ -346,39 +456,44 @@ uint8_t getSlaveBatteryLevel() {
     100
     GND
     4096 ----- 3.3V
-    x	 ----- 2.8V	
+    x	 ----- 2.8V
     y	 ----- 2.13V
     0	 ----- 0V
     3475 ---- 100%
     2643 ---- 0%
     832
     */
-    return (uint8_t) ((value - 2643) / 832);
+    return (uint8_t)((value - 2643) / 832);
 }
 
-void populateSensorsData(uint8_t i) {
+void readSensorAndPopulateData(uint8_t i)
+{
     printf("Populate sensor %d data\r\n", i);
     sensorsService.readSensors(i);
     for (uint8_t j = 0; j < 8; j++)
     {
-        sensorData[i][j] = sensorsService.getSensors()[i].ds18b20->getRom()[j];                                       // ROM
-    }       
-    sensorData[i][8] = (uint8_t)(sensorsService.getSensors()[i].ds18b20->getTemperature());                           // TEMP_OUT
-    sensorData[i][9] = (uint8_t)(((uint8_t)(sensorsService.getSensors()[i].ds18b20->getTemperature() * 100)) % 100);  // TEMP_OUT
-    sensorData[i][10] = (uint32_t)(sensorsService.getSensors()[i].hx711->getWeight());                                // WEIGHT
-    sensorData[i][11] = (uint8_t)(((uint32_t)(sensorsService.getSensors()[i].hx711->getWeight() * 100)) % 100);       // WEIGHT
-    sensorData[i][12] = 29;                                                                                           // temp2
-    sensorData[i][13] = 10;                                                                                           // temp2
-    sensorData[i][14] = 50;                                                                                           // HUMEDITY
-    sensorData[i][15] = 25;                                                                                           // HUMEDITY
-    if (deviceIsMaster) {
-        sensorData[i][16] = modemService.getBatteryLevel();                                                           // BATTERY LEVEL 0 - 100
-    } else {
+        sensorData[i][j] = sensorsService.getSensors()[i].ds18b20->getRom()[j]; // ROM
+    }
+    sensorData[i][8] = (uint8_t)(sensorsService.getSensors()[i].ds18b20->getTemperature());                          // TEMP_OUT
+    sensorData[i][9] = (uint8_t)(((uint8_t)(sensorsService.getSensors()[i].ds18b20->getTemperature() * 100)) % 100); // TEMP_OUT
+    sensorData[i][10] = (uint32_t)(sensorsService.getSensors()[i].hx711->getWeight());                               // WEIGHT
+    sensorData[i][11] = (uint8_t)(((uint32_t)(sensorsService.getSensors()[i].hx711->getWeight() * 100)) % 100);      // WEIGHT
+    sensorData[i][12] = 29;                                                                                          // temp2
+    sensorData[i][13] = 10;                                                                                          // temp2
+    sensorData[i][14] = 50;                                                                                          // HUMEDITY
+    sensorData[i][15] = 25;                                                                                          // HUMEDITY
+    if (deviceIsMaster)
+    {
+        sensorData[i][16] = modemService.getBatteryLevel(); // BATTERY LEVEL 0 - 100
+    }
+    else
+    {
         sensorData[i][16] = getSlaveBatteryLevel();
-    }    
+    }
 }
 
-void sendData(uint8_t i) {
+void sendData(uint8_t i)
+{
     nRF24L01p.setTxMode();
     nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
     nRF24L01p.write(sensorData[i]);
@@ -432,91 +547,6 @@ void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const c
     }
 }
 
-/*
-        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
-
-        //nRF24L01p.printAllRegisters();
-
-        //date
-        data[0] = 0x02;
-        data[1] = 0x02;
-        data[2] = 0x02;
-
-        // time
-        data[3] = 0x02;
-        data[4] = 0x02;
-        data[5] = 0x01;
-
-        // alarm
-        data[6] = 0x02;
-        data[7] = 0x02;
-        data[8] = 0x0A;
-
-
-        if (!deviceIsMaster) {
-            if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode() && nRF24L01p.isDataAvailable()) {
-                // waked up by NRF IRQ
-                printf("It seems we were waked up by NRF IRQ\r\n");
-                handleReceiveDataEvent();
-
-            } else if ((PWR->CSR) & (PWR_CSR_SBF)) {
-
-                printf("It seems we were waked up from standby\r\n");
-                // waked up by RTC alarm
-                // TODO move NRF to RX and go standby
-
-                RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-
-                // time
-                data[6] = localTime.Hours;
-                data[7] = localTime.Minutes;
-                data[8] = localTime.Seconds;
-
-                data[8] += 10;
-                if (data[8] >= 60) {
-                    data[8] -= 60;
-                    data[7] += 1;
-                }
-                if (data[7] >= 60) {
-                    data[7] -= 60;
-                    data[6] += 1;
-                }
-
-                if (data[6] >= 24) {
-                    data[6] -= 24;
-                }
-
-                // TODO check years;
-                setAlarmDateTime();
-                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
-                HAL_Delay(2000);
-                goToStandByMode();
-            } else {
-                printf("It seems we were waked up by power on\r\n");
-                // TODO check current time
-                // Configure NRF to RX mode
-                // if date/time is not configured wait packet. Configure NRF to RX mode
-
-
-                //while(!nRF24L01p.isDataAvailable()) {
-                    // handle LED blink;
-                //}
-                handleReceiveDataEvent();
-
-
-                setLocalDateTime();
-                setAlarmDateTime();
-                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
-                HAL_Delay(2000);
-                goToStandByMode();
-
-            }
-        }
-
-
-        printf("Error!!!\r\n");
-        */
-
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
@@ -541,6 +571,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 void printDeviceInfo()
 {
     printf("\r\n");
+    printf("=====================================================================================\r\n");
     printf("Bees Scale Device powered by Eugen Scobich\r\n");
     printf("Device Address: 0x%0X%0X%0X%0X%0X\r\n", deviceAddress[0], deviceAddress[1], deviceAddress[2], deviceAddress[3], deviceAddress[4]);
     printf("Device Mode: %s\r\n", deviceIsMaster ? "Master" : "Slave");
@@ -551,27 +582,7 @@ void printDeviceInfo()
 
     printf("Device Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
     printf("Device Time: %02d:%02d:%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
-}
-
-void setLocalDateTime()
-{
-    // 1:3 bytes contains current date
-    // 4:6 bytes contains current time
-    HAL_RTC_SetLocalDate(data[1], data[2], data[3]);
-    RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
-    printf("Set Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
-
-    HAL_RTC_SetLocalTime(data[4], data[5], data[6]);
-    RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
-    printf("Set Time: %02d:%02d:%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
-}
-
-void setAlarmDateTime()
-{
-    // 7:9 bytes contains alarm time
-    HAL_RTC_SetLocalAlarm(data[7], data[8], data[9]);
-    RTC_TimeTypeDef localAlarm = HAL_RTC_GetLocalAlarm();
-    printf("Set Alarm Time: %02d:%02d:%02d\r\n", localAlarm.Hours, localAlarm.Minutes, localAlarm.Seconds);
+    printf("=====================================================================================\r\n");
 }
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
@@ -579,66 +590,38 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
     printf("Alarm!!!\r\n");
 }
 
-void handleReceiveDataEvent()
-{
-    nRF24L01p.receive(data);
-
-    if (data[0] == 0x01) {
-        printf("Received command to send sensor 1 details!!!\r\n");
-
-    }
-
-
-
-    setLocalDateTime();
-    setAlarmDateTime();
-
-    // data 0 MCU temp
-    // data 1:2 Bat voltage
-    // data 3:7 Reserved
-
-    // data 8:9 scale sensor 1
-    // data 10:11 temp sensor 1
-    // data 12:13 humidity sensor 1
-    // data 14:15 reserved
-
-    // data 16:17 scale sensor 1
-    // data 18:19 temp sensor 2
-    // data 20:21 humidity sensor 2
-    // data 22:23 reserved
-
-    // data 24:25 scale sensor 3
-    // data 26:27 temp sensor 3
-    // data 28:29 humidity sensor 3
-    // data 30:31 reserved
-
-    // TODO check sensors
-    // TODO return data
-
-    // TODO turn NRF off
-    // TODO go standby
-}
-
 void goToStandByMode()
 {
     printf("Go to StandBy Mode\r\n");
     ledService.blinkGreenRedOrangeLedOneTime();
-    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-    RCC->APB1ENR |= (RCC_APB1ENR_PWREN);
-    PWR->CR |= PWR_CR_CWUF;
-    PWR->CSR |= PWR_CSR_EWUP;
-    PWR->CR |= PWR_CR_CSBF;
+    HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);        // PWR->CR |= PWR_CR_CWUF;
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);        // PWR->CR |= PWR_CR_CSBF;
+    __HAL_RCC_PWR_CLK_ENABLE();               // RCC->APB1ENR |= (RCC_APB1ENR_PWREN);
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1); // PWR->CSR |= PWR_CSR_EWUP;
     HAL_PWR_EnterSTANDBYMode();
 }
 
 bool wakedUpFromA0()
 {
-    return (PWR->CSR) & (PWR_CSR_WUF);
+    return __HAL_PWR_GET_FLAG(PWR_FLAG_WU);
+    // return (PWR->CSR) & (PWR_CSR_WUF);
 }
 
 bool wakedUpFromStandby()
 {
-    return (PWR->CSR) & (PWR_CSR_SBF);
+    return __HAL_PWR_GET_FLAG(PWR_FLAG_SB);
+    // return (PWR->CSR) & (PWR_CSR_SBF);
+}
+
+bool wakedUpFromSoftware()
+{
+    return RCC->CSR & RCC_CSR_SFTRSTF;
+}
+
+bool wakedUpFromPinReset()
+{
+    return RCC->CSR & RCC_CSR_PINRSTF;
 }
 
 bool wakedUpFromPower()
