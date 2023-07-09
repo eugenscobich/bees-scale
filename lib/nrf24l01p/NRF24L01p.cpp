@@ -149,7 +149,6 @@ void NRF24L01p::init()
     disableIRQForMaxRetry();
     disableIRQForTx();
     setPayloadSize(0, 32);
-    //setCRCONumberOfBytes(2);
     setChannel(100);
     sendCommand(FLUSH_RX);
     sendCommand(FLUSH_TX);
@@ -281,8 +280,7 @@ void NRF24L01p::reset()
     writeRegister(RX_PW_P5, 0x00);
     writeRegister(FIFO_STATUS, 0x11);
     writeRegister(DYNPD, 0x00);
-    writeRegister(FEATURE, 0x00);
-    //enableCe();
+    writeRegister(FEATURE, 0x00);    
 }
 
 bool NRF24L01p::powerUp()
