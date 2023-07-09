@@ -17,9 +17,8 @@
 #include "time_service.h"
 #include <stdio.h>
 
-#define NRF_CHANNEL 100
-#define NRF_MASTER_ADDRESS 0x00001
-#define NRF_SLAVE_ADDRESS 0x00002
+#define NRF_MASTER_ADDRESS 0x1632A
+#define NRF_SLAVE_ADDRESS 0x1632B
 #define NRF_SEND_SENSOR_1_DATA_CMD 0x01
 #define NRF_SEND_SENSOR_2_DATA_CMD 0x02
 #define NRF_SEND_SENSOR_3_DATA_CMD 0x03
@@ -86,16 +85,16 @@ int alt_main()
     if (deviceIsMaster)
     {
         nRF24L01p.init();
-        nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
-        nRF24L01p.printAllRegisters();
+        nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
+        //nRF24L01p.printAllRegisters();
         data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
         bool successSendCmd = nRF24L01p.write(data);
         if (successSendCmd)
         {
             printf("Successful sent the message\r\n");
 
-            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
-            nRF24L01p.printAllRegisters();
+            nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, 0);
+            //nRF24L01p.printAllRegisters();
             startDelayTick = HAL_GetTick();
             while (true)
             {
@@ -108,6 +107,7 @@ int alt_main()
                 else if (startDelayTick + 10000 < HAL_GetTick())
                 {
                     printf("Slave 1, Sensor 1 wasn't retrieved in time. It seems Salve is not accepting requests\r\n");
+                    //nRF24L01p.printAllRegisters();
                     break;
                 }
             }
@@ -115,6 +115,7 @@ int alt_main()
         else
         {
             printf("Sending command 0x%02X to Slave 1 failed\r\n", data[0]);
+            nRF24L01p.printAllRegisters();
         }
     }
     else
@@ -125,8 +126,8 @@ int alt_main()
             {
                 nRF24L01p.receive(data);
                 printf("Recieved CMD: 0x%02X\r\n", data[0]);
-                nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
-                nRF24L01p.printAllRegisters();
+                nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS);
+                //nRF24L01p.printAllRegisters();
                 for (uint8_t i = 0; i < 32; i++)
                 {
                     data[i] = 1;
@@ -134,7 +135,10 @@ int alt_main()
                 bool successSendCmd = nRF24L01p.write(data);
                 if (successSendCmd)
                 {
-                    printf("Successful sent sensor data!\r\n");
+                    printf("Successful sent the message\r\n");
+                } else {
+                    printf("Sending data 0x%02X%02X%02X to Master failed\r\n", data[0], data[1], data[2]);
+                    nRF24L01p.printAllRegisters();
                 }
                 nRF24L01p.powerDown();
             }
@@ -145,8 +149,17 @@ int alt_main()
         } else {
             printf("Init NRF\r\n");
             nRF24L01p.init();
-            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 0);
             nRF24L01p.printAllRegisters();
+            while (true)
+            {
+                if (nRF24L01p.isDataAvailable())
+                {
+                    nRF24L01p.receive(data);
+                    printf("Slave 1, Sensor 1 details was received successful: 0x%02X%02X%02X\r\n", data[0], data[1], data[2]);
+                    break;
+                }
+            }
             goToStandByMode();
         }
     }
@@ -235,13 +248,13 @@ int alt_main()
                 bool slave1IsPrezent = false;
                 nRF24L01p.init();
                 nRF24L01p.setTxMode();
-                nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
                 nRF24L01p.printAllRegisters();
                 data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
                 bool successSendCmd = nRF24L01p.write(data);
                 if (successSendCmd)
                 {
-                    nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                    nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, 1);
                     nRF24L01p.printAllRegisters();
                     startDelayTick = HAL_GetTick();
                     while (true)
@@ -267,12 +280,12 @@ int alt_main()
                 if (slave1IsPrezent)
                 {
                     nRF24L01p.setTxMode();
-                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
                     data[0] = NRF_SEND_SENSOR_2_DATA_CMD;
                     bool successSendCmd = nRF24L01p.write(data);
                     if (successSendCmd)
                     {
-                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, 1);
                         startDelayTick = HAL_GetTick();
                         while (true)
                         {
@@ -298,12 +311,12 @@ int alt_main()
                 if (slave1IsPrezent)
                 {
                     nRF24L01p.setTxMode();
-                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
                     data[0] = NRF_SEND_SENSOR_3_DATA_CMD;
                     bool successSendCmd = nRF24L01p.write(data);
                     if (successSendCmd)
                     {
-                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+                        nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, 1);
                         startDelayTick = HAL_GetTick();
                         while (true)
                         {
@@ -329,7 +342,7 @@ int alt_main()
                 if (slave1IsPrezent)
                 {
                     nRF24L01p.setTxMode();
-                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                    nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
                     data[0] = NRF_SEND_GO_TO_SLEEP_CMD;
                     timeService.populateDataWithDateAndTime(data);
                     uint16_t minutes = modemService.getRefreshIntervalInMinutes();
@@ -357,7 +370,7 @@ int alt_main()
             {
                 printf("We are slave, enable radio and go to sleep to wait commands!\r\n");
                 nRF24L01p.init();
-                nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+                nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 1);
                 nRF24L01p.printAllRegisters();
                 goToStandByMode();
             }
@@ -429,7 +442,7 @@ int alt_main()
         else
         {
             nRF24L01p.init();
-            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+            nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 1);
             nRF24L01p.printAllRegisters();
             goToStandByMode();
         }
@@ -495,9 +508,9 @@ void readSensorAndPopulateData(uint8_t i)
 void sendData(uint8_t i)
 {
     nRF24L01p.setTxMode();
-    nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS, NRF_CHANNEL);
+    nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS);
     nRF24L01p.write(sensorData[i]);
-    nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, NRF_CHANNEL);
+    nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 1);
 }
 
 void nonBlockingDelay(uint32_t delayInTicks)

@@ -40,6 +40,8 @@ private:
     void setCsnHigh();
     void setCsnLow();
 
+    bool clearStatus();
+
     HAL_StatusTypeDef SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
     HAL_StatusTypeDef SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
 
@@ -52,6 +54,7 @@ private:
     void readRxFifo(uint8_t *data);
     void clearStatusRxDrFlag();
 
+    void printCE();
     void printConfigRegister();
     void printEnableAutoAcknolageRegister();
     void printEnableRXAddressesRegister();
@@ -84,16 +87,17 @@ private:
 
 public:
     void reset();
-    void powerUp();
-    void powerDown();
+    bool powerUp();
+    bool powerDown();
     bool isPowerUp();
     bool isPowerDown();
     bool isInTxMode();
     bool isInRxMode();
 
-    void setTxMode();
-    void setRxMode();
+    bool setTxMode();
+    bool setRxMode();
 
+    bool setCRCONumberOfBytes(uint8_t numberOfBytes);
     void disableIRQForTx();
     void disableIRQForRx();
     void disableIRQForMaxRetry();
@@ -111,20 +115,21 @@ public:
 
     NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin);
 
-
-    void openWritingPipe(uint64_t address, uint8_t cannel);
+    void openWritingPipe(uint64_t address);
     bool write(uint8_t *data);
     void readAll(uint8_t *data);
     void receive(uint8_t *data);
-    
-    void openReadingPipe(uint64_t address, uint8_t channel);
+    void openReadingPipe(uint64_t address, uint8_t pipeNumber);
+
     void init();
     void printRegister(uint8_t reg);
     void printAllRegisters();
     void setRetries(uint8_t delay, uint8_t count);
+    bool setChannel(uint8_t channel);
     bool setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate);
     bool setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum);
-    void setPayloadSize(uint8_t size);
+    bool setPayloadSize(uint8_t pipeNumber, uint8_t size);
+    bool disablePipe(uint8_t pipeNumber);
 };
 
 #endif // __NRF24L01p_H__
