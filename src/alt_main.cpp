@@ -86,7 +86,7 @@ int alt_main()
     {
         nRF24L01p.init();
         nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
-        //nRF24L01p.printAllRegisters();
+        nRF24L01p.printAllRegisters();
         data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
         bool successSendCmd = nRF24L01p.write(data);
         if (successSendCmd)
@@ -151,15 +151,6 @@ int alt_main()
             nRF24L01p.init();
             nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 0);
             nRF24L01p.printAllRegisters();
-            while (true)
-            {
-                if (nRF24L01p.isDataAvailable())
-                {
-                    nRF24L01p.receive(data);
-                    printf("Slave 1, Sensor 1 details was received successful: 0x%02X%02X%02X\r\n", data[0], data[1], data[2]);
-                    break;
-                }
-            }
             goToStandByMode();
         }
     }

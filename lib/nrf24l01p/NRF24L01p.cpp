@@ -149,7 +149,7 @@ void NRF24L01p::init()
     disableIRQForMaxRetry();
     disableIRQForTx();
     setPayloadSize(0, 32);
-    setCRCONumberOfBytes(2);
+    //setCRCONumberOfBytes(2);
     setChannel(100);
     sendCommand(FLUSH_RX);
     sendCommand(FLUSH_TX);
@@ -282,6 +282,7 @@ void NRF24L01p::reset()
     writeRegister(FIFO_STATUS, 0x11);
     writeRegister(DYNPD, 0x00);
     writeRegister(FEATURE, 0x00);
+    //enableCe();
 }
 
 bool NRF24L01p::powerUp()
@@ -332,7 +333,6 @@ void NRF24L01p::openWritingPipe(uint64_t address)
     setTxMode();
     writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t *>(&address), 5);
     writeRegister(TX_ADDR, reinterpret_cast<uint8_t *>(&address), 5);
-    sendCommand(FLUSH_TX);
     // continue with write method
 }
 
@@ -343,10 +343,9 @@ bool NRF24L01p::write(uint8_t *data)
     uint8_t cmd = W_TX_PAYLOAD;
     setCsnLow();
     SPI_Transmit(hspi, &cmd, 1);
-    SPI_Transmit(hspi, data, sizeof(data));
+    SPI_Transmit(hspi, data, 32);
     setCsnHigh();
 
-    // start transmition
     enableCe();
 
     uint32_t timer = HAL_GetTick();
@@ -368,11 +367,10 @@ bool NRF24L01p::write(uint8_t *data)
 
 void NRF24L01p::openReadingPipe(uint64_t address, uint8_t pipeNumber)
 {
+    disableCe();
     setRxMode();
-    sendCommand(FLUSH_RX);
     clearStatus();
     writeRegister(RX_ADDR_P0 + max(0, min(5, pipeNumber)), reinterpret_cast<uint8_t *>(&address), 5); // Write the Pipe0 address
-    // Enable the chip after configuring the device
     enableCe();
     // continue to wait for data avalability
 }
