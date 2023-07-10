@@ -54,6 +54,11 @@ private:
     void readRxFifo(uint8_t *data);
     void clearStatusRxDrFlag();
 
+
+
+
+
+
     void printCE();
     void printConfigRegister();
     void printEnableAutoAcknolageRegister();
@@ -87,17 +92,17 @@ private:
 
 public:
     void reset();
-    bool powerUp();
-    bool powerDown();
+    void powerUp();
+    void powerDown();
     bool isPowerUp();
     bool isPowerDown();
     bool isInTxMode();
     bool isInRxMode();
 
-    bool setTxMode();
-    bool setRxMode();
+    void setTxMode();
+    void setRxMode();
 
-    bool setCRCONumberOfBytes(uint8_t numberOfBytes);
+    void setCRCONumberOfBytes(uint8_t numberOfBytes);
     void disableIRQForTx();
     void disableIRQForRx();
     void disableIRQForMaxRetry();
@@ -125,11 +130,11 @@ public:
     void printRegister(uint8_t reg);
     void printAllRegisters();
     void setRetries(uint8_t delay, uint8_t count);
-    bool setChannel(uint8_t channel);
-    bool setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate);
-    bool setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum);
-    bool setPayloadSize(uint8_t pipeNumber, uint8_t size);
-    bool disablePipe(uint8_t pipeNumber);
+    void setChannel(uint8_t channel);
+    void setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate);
+    void setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum);
+    void setPayloadSize(uint8_t pipeNumber, uint8_t size);
+    void disablePipe(uint8_t pipeNumber);
 };
 
 #endif // __NRF24L01p_H__

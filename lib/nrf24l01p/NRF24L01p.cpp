@@ -142,6 +142,7 @@ void NRF24L01p::sendCommand(uint8_t command)
 
 void NRF24L01p::init()
 {
+    disableCe();
     reset();
     disablePipe(1);
     setRetries(15, 15);
@@ -150,18 +151,126 @@ void NRF24L01p::init()
     disableIRQForTx();
     setPayloadSize(0, 32);
     setChannel(100);
-    sendCommand(FLUSH_RX);
-    sendCommand(FLUSH_TX);
     powerUp();
 }
 
+void NRF24L01p::reset()
+{
+    // Reset registers
+    writeRegister(CONFIG, 0x08);     // Enabled CRC, Reflect RX, TX and MAX Retries on IRQ
+    writeRegister(EN_AA, 0x3F);      // All pipes have auto acknoladge
+    writeRegister(EN_RXADDR, 0x03);  // Only pipe0 and pipe1 are enabled
+    writeRegister(SETUP_AW, 0x03);   // 5 byte address
+    writeRegister(SETUP_RETR, 0x03); // 250uS retransmit intervals and 3 max retranmitions
+    writeRegister(RF_CH, 0x02);      // Channel nr 2
+    writeRegister(RF_SETUP, 0x0E);   // 2Mbits and 0dBm
+    writeRegister(STATUS, 0x70);     // Reset
+    uint8_t rxAddress0[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
+    writeRegister(RX_ADDR_P0, rxAddress0, 5); // Receive Address pipe 0
+    uint8_t rxAddress1[5] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
+    writeRegister(RX_ADDR_P1, rxAddress1, 5); // Receive Address pipe 1
+    writeRegister(RX_ADDR_P2, 0xC3);          // Receive Address pipe 2
+    writeRegister(RX_ADDR_P3, 0xC4);          // Receive Address pipe 3
+    writeRegister(RX_ADDR_P4, 0xC5);          // Receive Address pipe 4
+    writeRegister(RX_ADDR_P5, 0xC6);          // Receive Address pipe 5
+    writeRegister(TX_ADDR, rxAddress0, 5);    // Transmit Address
+    writeRegister(RX_PW_P0, 0x00);
+    writeRegister(RX_PW_P1, 0x00);
+    writeRegister(RX_PW_P2, 0x00);
+    writeRegister(RX_PW_P3, 0x00);
+    writeRegister(RX_PW_P4, 0x00);
+    writeRegister(RX_PW_P5, 0x00);
+    writeRegister(FIFO_STATUS, 0x11);
+    writeRegister(DYNPD, 0x00);
+    writeRegister(FEATURE, 0x00);    
+}
 
-bool NRF24L01p::disablePipe(uint8_t pipeNumber)
+void NRF24L01p::openWritingPipe(uint64_t address)
+{
+    disableCe();
+    sendCommand(FLUSH_TX);
+    setTxMode();
+    writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t *>(&address), 5);
+    writeRegister(TX_ADDR, reinterpret_cast<uint8_t *>(&address), 5);
+    
+    // start transmition if FIFO TX will be populated
+    enableCe();
+    // continue with write method
+}
+
+void NRF24L01p::openReadingPipe(uint64_t address, uint8_t pipeNumber)
+{
+    disableCe();
+    sendCommand(FLUSH_RX);
+    setRxMode();
+    writeRegister(RX_ADDR_P0 + max(0, min(5, pipeNumber)), reinterpret_cast<uint8_t *>(&address), 5); // Write the Pipe0 address
+    // enable listining
+    enableCe();
+    // continue to wait for data avalability
+}
+
+bool NRF24L01p::write(uint8_t *data)
+{   
+    uint8_t cmd = W_TX_PAYLOAD;
+    setCsnLow();
+    SPI_Transmit(hspi, &cmd, 1);
+    SPI_Transmit(hspi, data, 32);
+    setCsnHigh();
+
+    uint32_t timer = HAL_GetTick();
+    while (true) {
+        uint8_t status = readRegister(STATUS);
+        if (_CHECK_BIT(status, STATUS_TX_DS_5)) {
+            clearStatus();
+            return true;
+        } 
+        
+        if (_CHECK_BIT(status, STATUS_MAX_RT_4) || (timer + 1000) < HAL_GetTick()) {
+            clearStatus();
+            return false;
+        }
+    }
+    return false;
+}
+
+bool NRF24L01p::isDataAvailable()
+{
+    uint8_t status = readRegister(STATUS);
+    return _CHECK_BIT(status, STATUS_RX_DR_6);
+}
+
+void NRF24L01p::receive(uint8_t *data)
+{
+    readRxFifo(data);
+    clearStatusRxDrFlag();
+}
+
+void NRF24L01p::readRxFifo(uint8_t *data)
+{
+    uint8_t cmd = R_RX_PAYLOAD;
+    setCsnLow();
+    SPI_Transmit(hspi, &cmd, 1);
+    SPI_Receive(hspi, data, sizeof(data));
+    setCsnHigh();
+}
+
+void NRF24L01p::clearStatusRxDrFlag()
+{
+    uint8_t data = readRegister(STATUS);
+    data |= _BV(STATUS_RX_DR_6);
+    writeRegister(STATUS, data);
+}
+
+// =====================================================================
+
+void NRF24L01p::disablePipe(uint8_t pipeNumber)
 {
     int8_t addreses = readRegister(EN_RXADDR);
     addreses &= ~_BV(EN_RXADDR_ERX_P0_0 + max(0, min(5, pipeNumber)));
     writeRegister(EN_RXADDR, addreses);
-    return readRegister(EN_RXADDR) == addreses;
+    if (readRegister(EN_RXADDR) != addreses) {
+        printf("Could not disable pipe: %d", addreses);
+    }
 }
 
 bool NRF24L01p::clearStatus()
@@ -199,31 +308,28 @@ void NRF24L01p::setRetries(uint8_t delay, uint8_t count)
     writeRegister(SETUP_RETR, static_cast<uint8_t>(min(15, delay) << 4 | min(15, count)));
 }
 
-bool NRF24L01p::setDataRate(NRF24L01pDataRateEnum NRF24L01pDataRate)
+void NRF24L01p::setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate)
 {
     uint8_t rfSetup = readRegister(RF_SETUP);
     rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_LOW_5)));  // remove bit
     rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_DR_HIGH_3))); // remove bit
-    if (NRF24L01pDataRate == NRF24L01p_250KBPS)
+    if (nrf24L01pDataRate == NRF24L01p_250KBPS)
     {
         rfSetup = static_cast<uint8_t>(rfSetup | (_BV(RF_SETUP_RF_DR_LOW_5))); // set bit
     }
-    else if (NRF24L01pDataRate == NRF24L01p_2MBPS)
+    else if (nrf24L01pDataRate == NRF24L01p_2MBPS)
     {
         rfSetup = static_cast<uint8_t>(rfSetup | (_BV(RF_SETUP_RF_DR_HIGH_3)));
     }
 
     writeRegister(RF_SETUP, rfSetup);
 
-    // Verify our result
-    if (readRegister(RF_SETUP) == rfSetup)
-    {
-        return true;
+    if (readRegister(RF_SETUP) != rfSetup) {
+        printf("Could not data rate: %d", nrf24L01pDataRate);
     }
-    return false;
 }
 
-bool NRF24L01p::setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum)
+void NRF24L01p::setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum)
 {
     uint8_t rfSetup = readRegister(RF_SETUP);
     rfSetup = static_cast<uint8_t>(rfSetup & ~(_BV(RF_SETUP_RF_PWR_2))); // remove bit
@@ -243,168 +349,66 @@ bool NRF24L01p::setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum)
 
     writeRegister(RF_SETUP, rfSetup);
 
-    // Verify our result
-    if (readRegister(RF_SETUP) == rfSetup)
-    {
-        return true;
+    if (readRegister(RF_SETUP) != rfSetup) {
+        printf("Could not power rate: %d", nrf24L01pRxPowerEnum);
     }
-    return false;
 }
 
-void NRF24L01p::reset()
-{
-    disableCe();
-    // Reset registers
-    writeRegister(CONFIG, 0x08);     // Enabled CRC, Reflect RX, TX and MAX Retries on IRQ
-    writeRegister(EN_AA, 0x3F);      // All pipes have auto acknoladge
-    writeRegister(EN_RXADDR, 0x03);  // Only pipe0 and pipe1 are enabled
-    writeRegister(SETUP_AW, 0x03);   // 5 byte address
-    writeRegister(SETUP_RETR, 0x03); // 250uS retransmit intervals and 3 max retranmitions
-    writeRegister(RF_CH, 0x02);      // Channel nr 2
-    writeRegister(RF_SETUP, 0x0E);   // 2Mbits and 0dBm
-    writeRegister(STATUS, 0x70);     // Reset
-    uint8_t rxAddress0[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
-    writeRegister(RX_ADDR_P0, rxAddress0, 5); // Receive Address pipe 0
-    uint8_t rxAddress1[5] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
-    writeRegister(RX_ADDR_P1, rxAddress1, 5); // Receive Address pipe 1
-    writeRegister(RX_ADDR_P2, 0xC3);          // Receive Address pipe 2
-    writeRegister(RX_ADDR_P3, 0xC4);          // Receive Address pipe 3
-    writeRegister(RX_ADDR_P4, 0xC5);          // Receive Address pipe 4
-    writeRegister(RX_ADDR_P5, 0xC6);          // Receive Address pipe 5
-    writeRegister(TX_ADDR, rxAddress0, 5);    // Transmit Address
-    writeRegister(RX_PW_P0, 0x00);
-    writeRegister(RX_PW_P1, 0x00);
-    writeRegister(RX_PW_P2, 0x00);
-    writeRegister(RX_PW_P3, 0x00);
-    writeRegister(RX_PW_P4, 0x00);
-    writeRegister(RX_PW_P5, 0x00);
-    writeRegister(FIFO_STATUS, 0x11);
-    writeRegister(DYNPD, 0x00);
-    writeRegister(FEATURE, 0x00);    
-}
-
-bool NRF24L01p::powerUp()
+void NRF24L01p::powerUp()
 {
     uint8_t config = readRegister(CONFIG);
     if (!_CHECK_BIT(config, CONFIG_PWR_UP_1)) {
         config |= _BV(CONFIG_PWR_UP_1);
         writeRegister(CONFIG, config);
-        HAL_Delay(2);
-        return readRegister(CONFIG) == config;
+        HAL_Delay(10);
+        if (readRegister(CONFIG) != config) {
+            printf("Could not power up");
+        }
     }
-    return true;
 }
 
-bool NRF24L01p::powerDown()
+void NRF24L01p::powerDown()
 {
     disableCe();
     uint8_t config = readRegister(CONFIG);
     config &= ~(_BV(CONFIG_PWR_UP_1));
     writeRegister(CONFIG, config);
-    return readRegister(CONFIG) == config;
+    if (readRegister(CONFIG) != config) {
+        printf("Could not power down");
+    }
 }
 
-bool NRF24L01p::setTxMode()
+void NRF24L01p::setTxMode()
 {
     uint8_t config = readRegister(CONFIG);
     config &= ~(_BV(CONFIG_PRIM_RX_0));
     writeRegister(CONFIG, config);
-    return readRegister(CONFIG) == config;
+    if (readRegister(CONFIG) != config) {
+        printf("Could not set in TX Mode");
+    }
 }
 
-bool NRF24L01p::setRxMode()
+void NRF24L01p::setRxMode()
 {
     uint8_t config = readRegister(CONFIG);
     config |= _BV(CONFIG_PRIM_RX_0);
     writeRegister(CONFIG, config);
-    return readRegister(CONFIG) == config;
-}
-
-bool NRF24L01p::setChannel(uint8_t channel) {
-    writeRegister(RF_CH, channel);
-    return readRegister(RF_CH) == channel;
-}
-
-void NRF24L01p::openWritingPipe(uint64_t address)
-{
-    disableCe();
-    setTxMode();
-    writeRegister(RX_ADDR_P0, reinterpret_cast<uint8_t *>(&address), 5);
-    writeRegister(TX_ADDR, reinterpret_cast<uint8_t *>(&address), 5);
-    // continue with write method
-}
-
-
-bool NRF24L01p::write(uint8_t *data)
-{   
-    clearStatus();
-    uint8_t cmd = W_TX_PAYLOAD;
-    setCsnLow();
-    SPI_Transmit(hspi, &cmd, 1);
-    SPI_Transmit(hspi, data, 32);
-    setCsnHigh();
-
-    enableCe();
-
-    uint32_t timer = HAL_GetTick();
-    while (true) {
-        uint8_t status = readRegister(STATUS);
-        if (_CHECK_BIT(status, STATUS_TX_DS_5)) {
-            disableCe();
-            return true;
-        } 
-        
-        if (_CHECK_BIT(status, STATUS_MAX_RT_4) || (timer + 1000) < HAL_GetTick()) {
-            disableCe();
-            sendCommand(FLUSH_TX);
-            return false;
-        }
+    if (readRegister(CONFIG) != config) {
+        printf("Could not set in RX Mode");
     }
-    return false;
 }
 
-void NRF24L01p::openReadingPipe(uint64_t address, uint8_t pipeNumber)
-{
-    disableCe();
-    setRxMode();
-    clearStatus();
-    writeRegister(RX_ADDR_P0 + max(0, min(5, pipeNumber)), reinterpret_cast<uint8_t *>(&address), 5); // Write the Pipe0 address
-    enableCe();
-    // continue to wait for data avalability
-}
-
-bool NRF24L01p::isDataAvailable()
-{
-    uint8_t status = readRegister(STATUS);
-    return _CHECK_BIT(status, STATUS_RX_DR_6);
+void NRF24L01p::setChannel(uint8_t channel) {
+    writeRegister(RF_CH, channel);
+    if (readRegister(RF_CH) != channel) {
+        printf("Could not set the Channel: %d", channel);
+    }
 }
 
 uint8_t NRF24L01p::getDataPipeAvailable()
 {
     uint8_t data = readRegister(STATUS);
     return (data & (_BV(STATUS_RX_P_NO_3) | _BV(STATUS_RX_P_NO_2) | _BV(STATUS_RX_P_NO_1)) >> 1);
-}
-
-void NRF24L01p::readRxFifo(uint8_t *data)
-{
-    setCsnLow();
-    uint8_t cmd = R_RX_PAYLOAD;
-    SPI_Transmit(hspi, &cmd, 1);
-    SPI_Receive(hspi, data, sizeof(data));
-    setCsnHigh();
-}
-
-void NRF24L01p::clearStatusRxDrFlag()
-{
-    uint8_t data = readRegister(STATUS);
-    data |= _BV(STATUS_RX_DR_6);
-    writeRegister(STATUS, data);
-}
-
-void NRF24L01p::receive(uint8_t *data)
-{
-    readRxFifo(data);
-    clearStatusRxDrFlag();
 }
 
 // Read all the Register data
@@ -432,12 +436,14 @@ void NRF24L01p::readAll(uint8_t *data)
     }
 }
 
-bool NRF24L01p::setPayloadSize(uint8_t pipeNumber, uint8_t size)
+void NRF24L01p::setPayloadSize(uint8_t pipeNumber, uint8_t size)
 {
     // payload size must be in range [1, 32]
     uint8_t payloadSize = static_cast<uint8_t>(max(1, min(32, size)));
     writeRegister(RX_PW_P0 + max(0, min(5, pipeNumber)), payloadSize);
-    return payloadSize == readRegister(RX_PW_P0 + max(0, min(5, pipeNumber)));
+    if (readRegister(RX_PW_P0 + max(0, min(5, pipeNumber))) != payloadSize) {
+        printf("Could not set payload");
+    }
 }
 
 void NRF24L01p::handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count)
@@ -465,8 +471,7 @@ void NRF24L01p::handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count)
         HAL_Delay(4000);
     }
 }
-
-bool NRF24L01p::setCRCONumberOfBytes(uint8_t numberOfBytes)
+void NRF24L01p::setCRCONumberOfBytes(uint8_t numberOfBytes)
 {
     uint8_t config = readRegister(CONFIG);
     if (max(1, min(2, numberOfBytes)) == 1) {
@@ -475,7 +480,10 @@ bool NRF24L01p::setCRCONumberOfBytes(uint8_t numberOfBytes)
         config |= _BV(CONFIG_CRCO_2);
     }
     writeRegister(CONFIG, config);
-    return readRegister(CONFIG) == config;
+    if (readRegister(CONFIG) != config) {
+        printf("Could not set CRCO");
+    }
+    
 }
 
 void NRF24L01p::disableIRQForTx()

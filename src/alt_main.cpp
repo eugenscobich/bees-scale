@@ -72,7 +72,7 @@ int alt_main()
 {
     buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     HAL_TIM_Base_Start(&htim1);
-    nonBlockingDelay(100);
+    //nonBlockingDelay(10000);
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
     sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
@@ -87,7 +87,7 @@ int alt_main()
         nRF24L01p.init();
         nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
         nRF24L01p.printAllRegisters();
-        data[0] = NRF_SEND_SENSOR_1_DATA_CMD;
+        data[0] = NRF_SEND_SENSOR_1_DATA_CMD + HAL_RTC_GetLocalTime().Seconds;
         bool successSendCmd = nRF24L01p.write(data);
         if (successSendCmd)
         {
@@ -140,7 +140,7 @@ int alt_main()
                     printf("Sending data 0x%02X%02X%02X to Master failed\r\n", data[0], data[1], data[2]);
                     nRF24L01p.printAllRegisters();
                 }
-                nRF24L01p.powerDown();
+                nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 0);
             }
             else
             {
@@ -151,10 +151,8 @@ int alt_main()
             nRF24L01p.init();
             nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, 0);
             nRF24L01p.printAllRegisters();
-            goToStandByMode();
         }
     }
-    HAL_Delay(5000);
     goToStandByMode();
     // =====================================  Sandbox
 
