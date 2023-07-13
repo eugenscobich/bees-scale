@@ -40,7 +40,10 @@ private:
     void setCsnHigh();
     void setCsnLow();
 
-    bool clearStatus();
+    void clearStatus();
+    void clearRxStatus();
+    void clearTxStatus();
+    void clearMaxRtStatus();
 
     HAL_StatusTypeDef SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
     HAL_StatusTypeDef SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size);
@@ -50,14 +53,6 @@ private:
     uint8_t readRegister(uint8_t reg);
     void readRegister(uint8_t reg, uint8_t *data, uint32_t size);
     void sendCommand(uint8_t command);
-
-    void readRxFifo(uint8_t *data);
-    void clearStatusRxDrFlag();
-
-
-
-
-
 
     void printCE();
     void printConfigRegister();
@@ -101,6 +96,8 @@ public:
 
     void setTxMode();
     void setRxMode();
+    void flushRx();
+    void flushTx();
 
     void setCRCONumberOfBytes(uint8_t numberOfBytes);
     void disableIRQForTx();
@@ -110,7 +107,9 @@ public:
     void enableIRQForRx();
     void enableIRQForMaxRetry();
 
-    // Check if data is available
+    // Check if data is available based on status register
+    bool isDataReceived();
+    // Check if data is available based on pipe number that contains data
     bool isDataAvailable();
     // Return the pipe number where data is available
     uint8_t getDataPipeAvailable();
@@ -124,7 +123,12 @@ public:
     bool write(uint8_t *data);
     void readAll(uint8_t *data);
     void receive(uint8_t *data);
+    void readRxFifo(uint8_t *data);
+    void writeTxFifo(uint8_t *data);
     void openReadingPipe(uint64_t address, uint8_t pipeNumber);
+
+    void startListening();
+    void stopListening();
 
     void init();
     void printRegister(uint8_t reg);
@@ -135,6 +139,9 @@ public:
     void setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum);
     void setPayloadSize(uint8_t pipeNumber, uint8_t size);
     void disablePipe(uint8_t pipeNumber);
+    void enableDynamicPayload(uint8_t pipeNumber);
+    void enablePayloadWithAknoladge();
+    bool writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size);
 };
 
 #endif // __NRF24L01p_H__

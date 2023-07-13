@@ -1,6 +1,13 @@
 #ifndef __NRF24L01pMemoryMap_H__
 #define __NRF24L01pMemoryMap_H__
 
+#define RX_PIPE_0  0x00
+#define RX_PIPE_1  0x01
+#define RX_PIPE_2  0x02
+#define RX_PIPE_3  0x03
+#define RX_PIPE_4  0x04
+#define RX_PIPE_5  0x05
+
 /* Memory Map */
 #define CONFIG      0x00
 #define EN_AA       0x01

@@ -573,16 +573,16 @@ ModemServiceResultStatus ModemService::sendData(uint8_t sensorData[][32]) {
                 sensorData[i][8],
                 sensorData[i][9],
                 //weight
-                sensorData[i][10],
-                sensorData[i][11],
-                //temp
-                sensorData[i][12],
-                sensorData[i][13],
-                //humidity
+                (uint32_t)(sensorData[i][10] << 24 & sensorData[i][11] << 16 & sensorData[i][12] << 8 & sensorData[i][13]),
                 sensorData[i][14],
+                //temp
                 sensorData[i][15],
+                sensorData[i][16],
+                //humidity
+                sensorData[i][17],
+                sensorData[i][18],
                 //battery
-                sensorData[i][16]
+                sensorData[i][19]
             );
             printf("Sensor: %d JSON data: %s\r\n", i, sensorDataJson);
             strcat(data, sensorDataJson);
