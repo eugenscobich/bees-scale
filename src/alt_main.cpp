@@ -26,7 +26,7 @@
 
 void update();
 
-NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin);
+NRF24L01p nRF24L01p(&hspi1, NRF_CE_GPIO_Port, NRF_CE_Pin, NRF_CSN_GPIO_Port, NRF_CSN_Pin, &update);
 SIM800C sim800c(&huart1, SIM800C_PWR_GPIO_Port, SIM800C_PWR_Pin, SIM800C_DTR_GPIO_Port, SIM800C_DTR_Pin, &update);
 HX711 hx711_1(&htim1, HX711_DT_1_GPIO_Port, HX711_DT_1_Pin, HX711_SCK_GPIO_Port, HX711_SCK_Pin);
 HX711 hx711_2(&htim1, HX711_DT_2_GPIO_Port, HX711_DT_2_Pin, HX711_SCK_GPIO_Port, HX711_SCK_Pin);
@@ -51,7 +51,7 @@ uint8_t sensorData[3][32] = {0};
 bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
 bool deviceWasWakedUpFromPower = false;
-bool buttonIsPressed = false;
+bool isButtonPressed = false;
 uint8_t uart2RxBuffer[1];
 uint32_t startDelayTick;
 
@@ -74,10 +74,10 @@ float getCpuTemperature() ;
 
 int alt_main()
 {
-    buttonIsPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
+    isButtonPressed = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_SET;
     HAL_TIM_Base_Start(&htim1);
-    // nonBlockingDelay(100);
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
+
     sim800c.init();
     deviceIsMaster = modemService.isSIM800CPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
@@ -85,148 +85,9 @@ int alt_main()
     printDeviceInfo();
     ModemServiceResultStatus modemResultStatus;
     /*
-        // ================ Sandbox
-        if (deviceIsMaster)
-        {
-            nRF24L01p.init();
-            // nRF24L01p.enablePayloadWithAknoladge();
-            // nRF24L01p.enableDynamicPayload(0);
-            // nRF24L01p.enableDynamicPayload(1);
-
-            for (uint8_t i = 0; i < 3; i++)
-            {
-                nRF24L01p.stopListening();
-                nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS);
-                uint8_t data1[32] = {i, 0x01, 0x01, 0x00, 0x00, 0x04, 0x0D, 0x00, 0x04, 0x2B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-                printf("Send Data: 0x%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
-                       data1[0], data1[1], data1[2], data1[3], data1[4], data1[5], data1[6], data1[7],
-                       data1[8], data1[9], data1[10], data1[11], data1[12], data1[13], data1[14], data1[15],
-                       data1[16], data1[17], data1[18], data1[19]);
-
-                bool successSendCmd = nRF24L01p.write(data1);
-                if (successSendCmd)
-                {
-                    nRF24L01p.openReadingPipe(NRF_MASTER_ADDRESS, RX_PIPE_1);
-                    nRF24L01p.startListening();
-                    startDelayTick = HAL_GetTick();
-                    while (true)
-                    {
-                        if (nRF24L01p.isDataReceived())
-                        {
-                            nRF24L01p.receive(data);
-                            printf("Received Data: 0x%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
-                                   data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-                                   data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-                                   data[16], data[17], data[18], data[19]);
-                            break;
-                        }
-                        else if (startDelayTick + 3000 < HAL_GetTick())
-                        {
-                            printf("Timeout\r\n");
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    printf("Send Data failed: 0x%02X\r\n", data1[0]);
-                }
-            }
-
-            // nRF24L01p.printAllRegisters();
-            nRF24L01p.powerDown();
-            goToStandByMode();
-        }
-        else
-        {
-            nRF24L01p.isPowerUp();
-            if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
-            {
-                if (nRF24L01p.isDataReceived())
-                {
-                    startDelayTick = HAL_GetTick();
-                    while (true)
-                    {
-                        if (nRF24L01p.isDataReceived())
-                        {
-                            nRF24L01p.receive(data);
-                            printf("Received Data: 0x%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
-                                    data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-                                    data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-                                    data[16], data[17], data[18], data[19]);
-
-                            readSensorAndPopulateData(data[0]);
-
-                            nRF24L01p.stopListening();
-                            nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS);
-
-                            bool successSendCmd = false;
-                            if (data[0] == 2) {
-                                uint8_t data1[32] = {0x28, 0xF0, 0x5E, 0xB5, 0x05, 0x00, 0x00, 0x7E, 0x1B, 0x06, 0x00, 0x00, 0xAC, 0xDE, 0x46, 0x1D, 0x0A, 0x32, 0x19, 0xEA, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-                                successSendCmd = nRF24L01p.write(data1);
-                            } else {
-                                uint8_t data1[32] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1D, 0x0A, 0x32, 0x19, 0xEA, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-                                successSendCmd = nRF24L01p.write(data1);
-                            }
-
-                            if (successSendCmd)
-                            {
-                                if (data[0] == 2) {
-                                    printf("Session ended\r\n");
-                                    break;
-                                } else {
-                                    printf("Continue listening\r\n");
-                                    nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, RX_PIPE_1);
-                                    nRF24L01p.startListening();
-                                }
-                            }
-                            else
-                            {
-                                printf("Send Data failed: 0x%02X\r\n", data[0]);
-                            }
-
-                        }
-                        else if (startDelayTick + 10000 < HAL_GetTick())
-                        {
-                            printf("Timeout\r\n");
-                            break;
-                        }
-
-                    }
-
-                    nRF24L01p.powerDown();
-                    goToStandByMode();
-                }
-                else
-                {
-                    printf("NRF is UP and RX but no data\r\n");
-                }
-            }
-            else
-            {
-                printf("Init NRF\r\n");
-                nRF24L01p.init();
-                // nRF24L01p.enablePayloadWithAknoladge();
-                // nRF24L01p.enableDynamicPayload(0);
-                // nRF24L01p.enableDynamicPayload(1);
-                nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, RX_PIPE_1);
-
-                                nRF24L01p.flushTx();
-                                //0x0000000000000000000000000000001D0A3219EA
-                                uint8_t data1[32] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1D, 0x0A, 0x32, 0x19, 0xEA, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-                                printf("Write Acknowledge Payload: %d\r\n", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, data1, 32));
-                                printf("Write Acknowledge Payload: %d\r\n", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, data1, 32));
-                                //0x28F05EB50500007E1B060000ACDE461D0A3219EA
-                                uint8_t data2[32] = {0x28, 0xF0, 0x5E, 0xB5, 0x05, 0x00, 0x00, 0x7E, 0x1B, 0x06, 0x00, 0x00, 0xAC, 0xDE, 0x46, 0x1D, 0x0A, 0x32, 0x19, 0xEA, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-                                printf("Write Acknowledge Payload: %d\r\n", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, data2, 32));
-
-                nRF24L01p.startListening();
-
-                // nRF24L01p.printAllRegisters();
-            }
-        }
-        goToStandByMode();
-        // =====================================  Sandbox
+    // ===================================== Sandbox
+        
+    // =====================================  Sandbox
     */
     if (deviceWasWakedUpFromStandby)
     {
@@ -244,6 +105,7 @@ int alt_main()
                 printf("It seems we were waked up by NRF IRQ\r\n");
                 if (nRF24L01p.isDataReceived())
                 {
+                    uint8_t i = 0;
                     startDelayTick = HAL_GetTick();
                     while (true)
                     {
@@ -252,6 +114,10 @@ int alt_main()
                             nRF24L01p.receive(data);
                             printf("Received ");
                             printData(data);
+                            i++;
+                            if (i == 3) {
+                                break; // waits up to 3 requests
+                            }
                         }
                         else if (startDelayTick + 200 < HAL_GetTick())
                         {
@@ -318,6 +184,7 @@ int alt_main()
                             nRF24L01p.receive(sensorData[i]);
                             printf("Received ");
                             printData(sensorData[i]);
+                            nonBlockingDelay(40); // To allow slave to receive data and print it
                         }
                         else
                         {
@@ -346,7 +213,7 @@ int alt_main()
     else if (!deviceWasWakedUpFromPower)
     {
         printf("Waked Up from reset!\r\n");
-        sensorsService.calibrateScales(buttonIsPressed);
+        sensorsService.calibrateScales(isButtonPressed);
     }
     else
     {
@@ -375,7 +242,7 @@ int alt_main()
 
             if (modemResultStatus == MODEM_SUCCESS)
             {
-                if (buttonIsPressed)
+                if (isButtonPressed)
                 {
                     printf("Button was pressed. Clear all SMS and wait for new settings\r\n");
                     modemResultStatus = modemService.deleteAllSMS();
@@ -430,6 +297,7 @@ void initNrfOnPowerOn() {
     nRF24L01p.enableDynamicPayload(0);
     nRF24L01p.enableDynamicPayload(1);
     nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS, RX_PIPE_1);
+    nRF24L01p.printAllRegisters();
 
     nRF24L01p.flushTx();
     printf("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[0], 32));
@@ -466,9 +334,11 @@ uint8_t getSlaveBatteryLevel()
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);   // poll for conversion
     uint16_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
-
     printf("Raw adc value: %d\r\n", value);
-    printf("Voltage: %d\r\n", (uint32_t)(((3.3 * value) / 4098) * 1000));
+
+    uint32_t voltage = ((3.3 * value) / 4098) * 1000;
+    printf("Voltage: %d\r\n", voltage);
+
     HAL_ADC_Stop(&hadc1);                      // stop adc
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_SET);
     /*

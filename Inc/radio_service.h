@@ -15,6 +15,7 @@ private:
 public:
     RadioService(NRF24L01p* nRF24L01p, SensorsService* _sensorsService, void(*updateFunction)());
     
+    bool isRadioInRxMode();
 };
 
 #endif /* __RADIO_SERVICE_H__ */

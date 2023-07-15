@@ -10,3 +10,7 @@ RadioService::RadioService(NRF24L01p* _nRF24L01p, SensorsService* _sensorsServic
 {
 
 }
+
+bool RadioService::isRadioInRxMode() {
+    return nRF24L01p->isPowerUp() && nRF24L01p->isInRxMode();
+}

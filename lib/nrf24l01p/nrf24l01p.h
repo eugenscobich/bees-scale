@@ -28,11 +28,16 @@ class NRF24L01p {
 private:
     SPI_HandleTypeDef* hspi;
 
-    GPIO_TypeDef* nrf_ce_GPIOx;
-    uint16_t nrf_ce_GPIO_Pin; /* "Chip Enable" pin, activates the RX or TX role */
+    GPIO_TypeDef* nrfCeGPIOx;
+    uint16_t nrfCeGPIOPin; /* "Chip Enable" pin, activates the RX or TX role */
 
-    GPIO_TypeDef* nrf_csn_GPIOx;
-    uint16_t nrf_csn_GPIO_Pin; /* SPI Chip select */
+    GPIO_TypeDef* nrfCsnGPIOx;
+    uint16_t nrfCsnGPIOPin; /* SPI Chip select */
+
+    void(*updateFunction)();
+
+    void nonBlockingDelay(uint32_t delayInTicks);
+    uint32_t startDelayTick;
 
     bool isCeEnabled();
     void enableCe();
@@ -86,6 +91,9 @@ private:
 
 
 public:
+
+    NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin, void(*_updateFunction)());
+
     void reset();
     void powerUp();
     void powerDown();
@@ -113,11 +121,6 @@ public:
     bool isDataAvailable();
     // Return the pipe number where data is available
     uint8_t getDataPipeAvailable();
-
-    void handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count);
-
-
-    NRF24L01p(SPI_HandleTypeDef* _hspi, GPIO_TypeDef* _nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef* _nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin);
 
     void openWritingPipe(uint64_t address);
     bool write(uint8_t *data);

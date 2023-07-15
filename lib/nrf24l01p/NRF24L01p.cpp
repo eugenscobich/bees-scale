@@ -1,17 +1,40 @@
 
 #include "NRF24L01p.h"
 
-#define _BV(b) (1UL << (b))
+#define INFO  "INFO "
+#define DEBUG "DEBUG"
+#define WARN  "WARN "
+#define ERROR "ERROR"
+#define CLASS_NAME "NRF24L01p"
+
 
 #define max(a, b) (a > b ? a : b)
 #define min(a, b) (a < b ? a : b)
 
-NRF24L01p::NRF24L01p(SPI_HandleTypeDef *_hspi, GPIO_TypeDef *_nrf_ce_GPIOx, uint16_t _nrf_ce_GPIO_Pin, GPIO_TypeDef *_nrf_csn_GPIOx, uint16_t _nrf_csn_GPIO_Pin) : hspi(_hspi),
-                                                                                                                                                                   nrf_ce_GPIOx(_nrf_ce_GPIOx),
-                                                                                                                                                                   nrf_ce_GPIO_Pin(_nrf_ce_GPIO_Pin),
-                                                                                                                                                                   nrf_csn_GPIOx(_nrf_csn_GPIOx),
-                                                                                                                                                                   nrf_csn_GPIO_Pin(_nrf_csn_GPIO_Pin)
+NRF24L01p::NRF24L01p(
+    SPI_HandleTypeDef *_hspi, 
+    GPIO_TypeDef *_nrfCeGPIOx, 
+    uint16_t _nrfCeGPIOPin, 
+    GPIO_TypeDef *_nrfCsnGPIOx, 
+    uint16_t _nrfCsnGPIOPin, 
+    void(*_updateFunction)()) : 
+        hspi(_hspi),
+        nrfCeGPIOx(_nrfCeGPIOx),
+        nrfCeGPIOPin(_nrfCeGPIOPin),
+        nrfCsnGPIOx(_nrfCsnGPIOx),
+        nrfCsnGPIOPin(_nrfCsnGPIOPin),
+        updateFunction(_updateFunction)
 {
+}
+
+void NRF24L01p::nonBlockingDelay(uint32_t delayInTicks) {
+    startDelayTick = HAL_GetTick();
+    while (true) {
+        if (startDelayTick + delayInTicks < HAL_GetTick()) {
+            return;
+        }
+        updateFunction();
+    }
 }
 
 HAL_StatusTypeDef NRF24L01p::SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData, uint16_t Size)
@@ -19,18 +42,18 @@ HAL_StatusTypeDef NRF24L01p::SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *pData
     HAL_StatusTypeDef halStatus = HAL_SPI_Receive(hspi, pData, Size, HAL_MAX_DELAY);
     if (halStatus == HAL_BUSY)
     {
-        printf("HAL_SPI_Receive statuts: HAL_BUSY, retry");
-        HAL_Delay(10);
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_BUSY, retry after 10us\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
+        nonBlockingDelay(10);
         return SPI_Receive(hspi, pData, Size);
     }
     else if (halStatus == HAL_ERROR)
     {
-        printf("HAL_SPI_Receive statuts: HAL_ERROR, nothing to do");
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_ERROR, nothing to do\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
         return halStatus;
     }
     else if (halStatus == HAL_TIMEOUT)
     {
-        printf("HAL_SPI_Receive statuts: HAL_TIMOUT, nothing to do");
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_TIMEOUT, nothing to do\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
         return halStatus;
     }
     return halStatus;
@@ -41,18 +64,18 @@ HAL_StatusTypeDef NRF24L01p::SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pDat
     HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(hspi, pData, Size, HAL_MAX_DELAY);
     if (halStatus == HAL_BUSY)
     {
-        printf("HAL_SPI_Receive statuts: HAL_BUSY, retry");
-        HAL_Delay(10);
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_BUSY, retry after 10us\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
+        nonBlockingDelay(10);
         return SPI_Receive(hspi, pData, Size);
     }
     else if (halStatus == HAL_ERROR)
     {
-        printf("HAL_SPI_Receive statuts: HAL_ERROR, nothing to do");
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_ERROR, nothing to do\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
         return halStatus;
     }
     else if (halStatus == HAL_TIMEOUT)
     {
-        printf("HAL_SPI_Receive statuts: HAL_TIMOUT, nothing to do");
+        printf("%010lu [%s] %s: HAL_SPI_Receive statuts: HAL_TIMEOUT, nothing to do\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
         return halStatus;
     }
     return halStatus;
@@ -60,27 +83,27 @@ HAL_StatusTypeDef NRF24L01p::SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *pDat
 
 bool NRF24L01p::isCeEnabled()
 {
-    return HAL_GPIO_ReadPin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin) == GPIO_PIN_SET;
+    return HAL_GPIO_ReadPin(nrfCeGPIOx, nrfCeGPIOPin) == GPIO_PIN_SET;
 }
 
 void NRF24L01p::enableCe()
 {
-    HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(nrfCeGPIOx, nrfCeGPIOPin, GPIO_PIN_SET);
 }
 
 void NRF24L01p::disableCe()
 {
-    HAL_GPIO_WritePin(nrf_ce_GPIOx, nrf_ce_GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(nrfCeGPIOx, nrfCeGPIOPin, GPIO_PIN_RESET);
 }
 
 void NRF24L01p::setCsnHigh()
 {
-    HAL_GPIO_WritePin(nrf_csn_GPIOx, nrf_csn_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(nrfCsnGPIOx, nrfCsnGPIOPin, GPIO_PIN_SET);
 }
 
 void NRF24L01p::setCsnLow()
 {
-    HAL_GPIO_WritePin(nrf_csn_GPIOx, nrf_csn_GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(nrfCsnGPIOx, nrfCsnGPIOPin, GPIO_PIN_RESET);
 }
 
 // Write single data
@@ -144,7 +167,7 @@ void NRF24L01p::sendCommand(uint8_t command)
 bool NRF24L01p::writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size)
 {
     uint8_t buf[1];
-    buf[0] = W_ACK_PAYLOAD | pipeNumber & 0x07;
+    buf[0] = W_ACK_PAYLOAD | (pipeNumber & 0x07);
 
     setCsnLow();
     SPI_Transmit(hspi, buf, 1);
@@ -167,17 +190,14 @@ void NRF24L01p::flushTx()
 void NRF24L01p::init()
 {
     disableCe();
-    HAL_Delay(5);
     reset();
     setRetries(5, 15);
-    //setDataRate(NRF24L01p_1MBPS);
-    setDataRate(NRF24L01p_250KBPS);
     disableIRQForMaxRetry();
     disableIRQForTx();
     setPayloadSize(RX_PIPE_0, 32);
     setPayloadSize(RX_PIPE_1, 32);
     setCRCONumberOfBytes(2);
-    setChannel(100);
+    setChannel(72);
     powerUp();
 }
 
@@ -224,7 +244,7 @@ void NRF24L01p::openWritingPipe(uint64_t address)
 void NRF24L01p::stopListening()
 {
     disableCe();
-    HAL_Delay(200);
+    //nonBlockingDelay(100);
     flushRx();
     setTxMode();
     clearStatus();
@@ -260,7 +280,7 @@ bool NRF24L01p::write(uint8_t *data)
 {
     flushTx();
     writeTxFifo(data);
-    HAL_Delay(1);
+    nonBlockingDelay(1);
     // start sending
     enableCe();
     uint32_t timer = HAL_GetTick();
@@ -279,7 +299,6 @@ bool NRF24L01p::write(uint8_t *data)
             clearMaxRtStatus();
             return false;
         }
-        HAL_Delay(100);
     }
     return false;
 }
@@ -330,7 +349,7 @@ void NRF24L01p::enableDynamicPayload(uint8_t pipeNumber)
     writeRegister(FEATURE, feature);
     if (readRegister(FEATURE) != feature)
     {
-        printf("Could not enable dynamic payload\r\n");
+        printf("%010lu [%s] %s: Could not enable dynamic payload\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 
     uint8_t dynpd = readRegister(DYNPD);
@@ -338,7 +357,7 @@ void NRF24L01p::enableDynamicPayload(uint8_t pipeNumber)
     writeRegister(DYNPD, dynpd);
     if (readRegister(DYNPD) != dynpd)
     {
-        printf("Could not set dynamic payload for pipe %d\r\n", pipeNumber);
+        printf("%010lu [%s] %s: Could not set dynamic payload for pipe %d\r\n", HAL_GetTick(), ERROR, CLASS_NAME, pipeNumber);
     }
 }
 
@@ -349,7 +368,7 @@ void NRF24L01p::enablePayloadWithAknoladge()
     writeRegister(FEATURE, feature);
     if (readRegister(FEATURE) != feature)
     {
-        printf("Could not enable dynamic payload\r\n");
+        printf("%010lu [%s] %s: Could not enable dynamic payload\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
@@ -360,7 +379,7 @@ void NRF24L01p::disablePipe(uint8_t pipeNumber)
     writeRegister(EN_RXADDR, addreses);
     if (readRegister(EN_RXADDR) != addreses)
     {
-        printf("Could not disable pipe: %d\r\n", addreses);
+        printf("%010lu [%s] %s: Could not disable pipe: %d\r\n", HAL_GetTick(), ERROR, CLASS_NAME, addreses);
     }
 }
 
@@ -435,7 +454,7 @@ void NRF24L01p::setDataRate(NRF24L01pDataRateEnum nrf24L01pDataRate)
 
     if (readRegister(RF_SETUP) != rfSetup)
     {
-        printf("Could not data rate: %d\r\n", nrf24L01pDataRate);
+        printf("%010lu [%s] %s: Could not data rate: %d\r\n", HAL_GetTick(), ERROR, CLASS_NAME, nrf24L01pDataRate);
     }
 }
 
@@ -461,7 +480,7 @@ void NRF24L01p::setRxPowerRate(NRF24L01pRxPowerEnum nrf24L01pRxPowerEnum)
 
     if (readRegister(RF_SETUP) != rfSetup)
     {
-        printf("Could not power rate: %d\r\n", nrf24L01pRxPowerEnum);
+        printf("%010lu [%s] %s: Could not power rate: %d\r\n", HAL_GetTick(), ERROR, CLASS_NAME, nrf24L01pRxPowerEnum);
     }
 }
 
@@ -475,7 +494,7 @@ void NRF24L01p::powerUp()
         HAL_Delay(10);
         if (readRegister(CONFIG) != config)
         {
-            printf("Could not power up\r\n");
+            printf("%010lu [%s] %s: Could not power up\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
         }
     }
 }
@@ -488,7 +507,7 @@ void NRF24L01p::powerDown()
     writeRegister(CONFIG, config);
     if (readRegister(CONFIG) != config)
     {
-        printf("Could not power down\r\n");
+        printf("%010lu [%s] %s: Could not power down\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
@@ -499,7 +518,7 @@ void NRF24L01p::setTxMode()
     writeRegister(CONFIG, config);
     if (readRegister(CONFIG) != config)
     {
-        printf("Could not set in TX Mode\r\n");
+        printf("%010lu [%s] %s: Could not set in TX Mode\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
@@ -510,7 +529,7 @@ void NRF24L01p::setRxMode()
     writeRegister(CONFIG, config);
     if (readRegister(CONFIG) != config)
     {
-        printf("Could not set in RX Mode\r\n");
+        printf("%010lu [%s] %s: Could not set in RX Mode\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
@@ -519,7 +538,7 @@ void NRF24L01p::setChannel(uint8_t channel)
     writeRegister(RF_CH, channel);
     if (readRegister(RF_CH) != channel)
     {
-        printf("Could not set the Channel: %d\r\n", channel);
+        printf("%010lu [%s] %s: Could not set the Channel: %d\r\n", HAL_GetTick(), ERROR, CLASS_NAME, channel);
     }
 }
 
@@ -561,35 +580,10 @@ void NRF24L01p::setPayloadSize(uint8_t pipeNumber, uint8_t size)
     writeRegister(RX_PW_P0 + max(0, min(5, pipeNumber)), payloadSize);
     if (readRegister(RX_PW_P0 + max(0, min(5, pipeNumber))) != payloadSize)
     {
-        printf("Could not set payload\r\n");
+        printf("%010lu [%s] %s: Could not set payload\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
-void NRF24L01p::handleSpiStatus(HAL_StatusTypeDef _status, uint8_t count)
-{
-    if (_status != HAL_OK)
-    {
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-        for (size_t i = 0; i < count; i++)
-        {
-            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-            if (_status == HAL_ERROR)
-            {
-                HAL_Delay(HAL_MAX_DELAY);
-            }
-            if (_status == HAL_TIMEOUT)
-            {
-                HAL_Delay(3000);
-            }
-            if (_status == HAL_BUSY)
-            {
-                HAL_Delay(100);
-            }
-        }
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-        HAL_Delay(4000);
-    }
-}
 void NRF24L01p::setCRCONumberOfBytes(uint8_t numberOfBytes)
 {
     uint8_t config = readRegister(CONFIG);
@@ -604,7 +598,7 @@ void NRF24L01p::setCRCONumberOfBytes(uint8_t numberOfBytes)
     writeRegister(CONFIG, config);
     if (readRegister(CONFIG) != config)
     {
-        printf("Could not set CRCO\r\n");
+        printf("%010lu [%s] %s: Could not set CRCO\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
     }
 }
 
@@ -677,13 +671,13 @@ void NRF24L01p::printAllRegisters()
 
 void NRF24L01p::printCE()
 {
-    printf("Is chip enabled: %s\r\n", isCeEnabled() ? "Yes" : "No");
+    printf("%010lu [%s] %s: Is chip enabled: %s\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, isCeEnabled() ? "Yes" : "No");
 }
 
 void NRF24L01p::printRegister(uint8_t reg)
 {
     uint8_t data = readRegister(reg);
-    char buf[26];
+    char buf[27];
     buf[0] = 'R';
     buf[1] = 'e';
     buf[2] = 'g';
@@ -718,8 +712,8 @@ void NRF24L01p::printConfigRegister()
 {
     uint8_t data = readRegister(CONFIG);
     char regId[] = "[0x00]";
-    printf("%s Register [CONFIG] Configuration Register:\r\n", regId);
-    printf("%s Mask interrupt caused by RX_DR [MASK_RX_DR]: ", regId);
+    printf("%010lu [%s] %s: %s Register [CONFIG] Configuration Register:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
+    printf("%010lu [%s] %s: %s Mask interrupt caused by RX_DR [MASK_RX_DR]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_MASK_RX_DR_6))
     {
         printf("[1] Interrupt not reflected on the IRQ pin\r\n");
@@ -728,7 +722,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] Reflect RX_DR as active low interrupt on the IRQ pin\r\n");
     }
-    printf("%s Mask interrupt caused by TX_DS [MASK_TX_DR]: ", regId);
+    printf("%010lu [%s] %s: %s Mask interrupt caused by TX_DS [MASK_TX_DR]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_MASK_TX_DS_5))
     {
         printf("[1] Interrupt not reflected on the IRQ pin\r\n");
@@ -737,7 +731,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] Reflect TX_DR as active low interrupt on the IRQ pin\r\n");
     }
-    printf("%s Mask interrupt caused by MAX_RT [MASK_MAX_RT]: ", regId);
+    printf("%010lu [%s] %s: %s Mask interrupt caused by MAX_RT [MASK_MAX_RT]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_MASK_MAX_RT_4))
     {
         printf("[1] Interrupt not reflected on the IRQ pin\r\n");
@@ -746,7 +740,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] Reflect MAX_RT as active low interrupt on the IRQ pin\r\n");
     }
-    printf("%s Enable CRC [EN_CRC]: ", regId);
+    printf("%010lu [%s] %s: %s Enable CRC [EN_CRC]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_EN_CRC_3))
     {
         printf("[1] Enabled or it was forced high if one of the bits in the EN_AA is high\r\n");
@@ -755,7 +749,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] Disabled\r\n");
     }
-    printf("%s CRC encoding scheme [CRCO]: ", regId);
+    printf("%010lu [%s] %s: %s CRC encoding scheme [CRCO]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_CRCO_2))
     {
         printf("[1] 2 byte\r\n");
@@ -764,7 +758,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] 1 byte\r\n");
     }
-    printf("%s Power [PWR_UP]: ", regId);
+    printf("%010lu [%s] %s: %s Power [PWR_UP]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_PWR_UP_1))
     {
         printf("[1] POWER UP\r\n");
@@ -773,7 +767,7 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] POWER DOWN\r\n");
     }
-    printf("%s RX/TX control [PRIM_RX]: ", regId);
+    printf("%010lu [%s] %s: %s RX/TX control [PRIM_RX]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     if (_CHECK_BIT(data, CONFIG_PRIM_RX_0))
     {
         printf("[1] PRX\r\n");
@@ -782,46 +776,43 @@ void NRF24L01p::printConfigRegister()
     {
         printf("[0] PTX\r\n");
     }
-    printf("\r\n");
 }
 
 void NRF24L01p::printEnableAutoAcknolageRegister()
 {
     uint8_t data = readRegister(EN_AA);
-    printf("[0x01] Register [EN_AA] Enable 'Auto Acknowledgment' Function:\r\n");
-    char message[] = "[0x01] Enable auto acknowledgement data pipe %d [ENAA_P%d]: %s";
+    printf("%010lu [%s] %s: [0x01] Register [EN_AA] Enable 'Auto Acknowledgment' Function:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME);
+    char message[] = "%010lu [%s] %s: [0x01] Enable auto acknowledgement data pipe %d [ENAA_P%d]: %s";
     char enabled[] = "[1] Enabled\r\n";
     char disabled[] = "[0] Disabled\r\n";
-    printf(message, 5, 5, _CHECK_BIT(data, EN_AA_ENAA_P5_5) ? enabled : disabled);
-    printf(message, 4, 4, _CHECK_BIT(data, EN_AA_ENAA_P4_4) ? enabled : disabled);
-    printf(message, 3, 3, _CHECK_BIT(data, EN_AA_ENAA_P3_3) ? enabled : disabled);
-    printf(message, 2, 2, _CHECK_BIT(data, EN_AA_ENAA_P2_2) ? enabled : disabled);
-    printf(message, 1, 1, _CHECK_BIT(data, EN_AA_ENAA_P1_1) ? enabled : disabled);
-    printf(message, 0, 0, _CHECK_BIT(data, EN_AA_ENAA_P0_0) ? enabled : disabled);
-    printf("\r\n");
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 5, 5, _CHECK_BIT(data, EN_AA_ENAA_P5_5) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 4, 4, _CHECK_BIT(data, EN_AA_ENAA_P4_4) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 3, 3, _CHECK_BIT(data, EN_AA_ENAA_P3_3) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 2, 2, _CHECK_BIT(data, EN_AA_ENAA_P2_2) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 1, 1, _CHECK_BIT(data, EN_AA_ENAA_P1_1) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 0, 0, _CHECK_BIT(data, EN_AA_ENAA_P0_0) ? enabled : disabled);
 }
 
 void NRF24L01p::printEnableRXAddressesRegister()
 {
     uint8_t data = readRegister(EN_RXADDR);
-    printf("[0x02] Register [EN_RXADDR] Enabled RX Addresses:\r\n");
-    char message[] = "[0x02] Enable data pipe %d [ERX_P%d]: %s";
+    printf("%010lu [%s] %s: [0x02] Register [EN_RXADDR] Enabled RX Addresses:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME);
+    char message[] = "%010lu [%s] %s: [0x02] Enable data pipe %d [ERX_P%d]: %s";
     char enabled[] = "[1] Enabled\r\n";
     char disabled[] = "[0] Disabled\r\n";
-    printf(message, 5, 5, _CHECK_BIT(data, EN_RXADDR_ERX_P5_5) ? enabled : disabled);
-    printf(message, 4, 4, _CHECK_BIT(data, EN_RXADDR_ERX_P4_4) ? enabled : disabled);
-    printf(message, 3, 3, _CHECK_BIT(data, EN_RXADDR_ERX_P3_3) ? enabled : disabled);
-    printf(message, 2, 2, _CHECK_BIT(data, EN_RXADDR_ERX_P2_2) ? enabled : disabled);
-    printf(message, 1, 1, _CHECK_BIT(data, EN_RXADDR_ERX_P1_1) ? enabled : disabled);
-    printf(message, 0, 0, _CHECK_BIT(data, EN_RXADDR_ERX_P0_0) ? enabled : disabled);
-    printf("\r\n");
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 5, 5, _CHECK_BIT(data, EN_RXADDR_ERX_P5_5) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 4, 4, _CHECK_BIT(data, EN_RXADDR_ERX_P4_4) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 3, 3, _CHECK_BIT(data, EN_RXADDR_ERX_P3_3) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 2, 2, _CHECK_BIT(data, EN_RXADDR_ERX_P2_2) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 1, 1, _CHECK_BIT(data, EN_RXADDR_ERX_P1_1) ? enabled : disabled);
+    printf(message, HAL_GetTick(), DEBUG, CLASS_NAME, 0, 0, _CHECK_BIT(data, EN_RXADDR_ERX_P0_0) ? enabled : disabled);
 }
 
 void NRF24L01p::printSetupAdressWidthRegister()
 {
     uint8_t data = readRegister(SETUP_AW);
-    printf("[0x03] Register [SETUP_AW] Setup of Address Widths:\r\n");
-    printf("[0x03] RX/TX Address field width [AW]: ");
+    printf("%010lu [%s] %s: [0x03] Register [SETUP_AW] Setup of Address Widths:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME);
+    printf("%010lu [%s] %s: [0x03] RX/TX Address field width [AW]: ", HAL_GetTick(), DEBUG, CLASS_NAME);
     if (_CHECK_BIT(data, SETUP_AW_AW_1))
     {
         if (_CHECK_BIT(data, SETUP_AW_AW_0))
@@ -844,14 +835,13 @@ void NRF24L01p::printSetupAdressWidthRegister()
             printf("[00] Illigal\r\n");
         }
     }
-    printf("\r\n");
 }
 
 void NRF24L01p::printSetuRetransmissionRegister()
 {
     uint8_t data = readRegister(SETUP_RETR);
-    printf("[0x04] Register [SETUP_RETR] Setup of Automatic Retransmission:\r\n");
-    printf("[0x04] Auto Retransmit Delay [ARD]: ");
+    printf("%010lu [%s] %s: [0x04] Register [SETUP_RETR] Setup of Automatic Retransmission:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME);
+    printf("%010lu [%s] %s: [0x04] Auto Retransmit Delay [ARD]: ", HAL_GetTick(), DEBUG, CLASS_NAME);
     uint8_t ard = (data & (_BV(SETUP_RETR_ARD_7) | _BV(SETUP_RETR_ARD_6) | _BV(SETUP_RETR_ARD_5) | _BV(SETUP_RETR_ARD_4))) >> 4;
     printf("[%c%c%c%c] %duS\r\n",
            _CHECK_BIT(ard, 3) ? '1' : '0',
@@ -860,7 +850,7 @@ void NRF24L01p::printSetuRetransmissionRegister()
            _CHECK_BIT(ard, 0) ? '1' : '0',
            250 + ard * 250);
 
-    printf("[0x04] Auto Retransmit Count [ARC]: ");
+    printf("%010lu [%s] %s: [0x04] Auto Retransmit Count [ARC]: ", HAL_GetTick(), DEBUG, CLASS_NAME);
     uint8_t arc = (data & (_BV(SETUP_RETR_ARC_3) | _BV(SETUP_RETR_ARC_2) | _BV(SETUP_RETR_ARC_1) | _BV(SETUP_RETR_ARC_0)));
     printf("[%c%c%c%c] ",
            _CHECK_BIT(arc, 3) ? '1' : '0',
@@ -875,38 +865,35 @@ void NRF24L01p::printSetuRetransmissionRegister()
     {
         printf("Up to %d Re-Transmit on fail of auto acknoladge\r\n", arc);
     }
-
-    printf("\r\n");
 }
 
 void NRF24L01p::printRfChannelRegister()
 {
     uint8_t data = readRegister(RF_CH);
-    printf("[0x05] Register [RF_CH] RF Channel: %d\r\n", data);
-    printf("\r\n");
+    printf("%010lu [%s] %s: [0x05] Register [RF_CH] RF Channel: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printRfSetupRegister()
 {
     uint8_t data = readRegister(RF_SETUP);
     char regId[] = "[0x06]";
-    printf("%s Register [RF_SETUP] RF Setup Register:\r\n", regId);
+    printf("%010lu [%s] %s: %s Register [RF_SETUP] RF Setup Register:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     char enabled[] = "[1] Enabled\r\n";
     char disabled[] = "[0] Disabled\r\n";
 
-    printf("%s Enables continuous carrier transmit when high [CONT_WAVE]: ", regId);
+    printf("%010lu [%s] %s: %s Enables continuous carrier transmit when high [CONT_WAVE]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, RF_SETUP_CONT_WAVE_7) ? enabled : disabled);
 
-    printf("%s Set RF Data Rate to 250kbps [RF_DR_LOW]: ", regId);
+    printf("%010lu [%s] %s: %s Set RF Data Rate to 250kbps [RF_DR_LOW]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, RF_SETUP_RF_DR_LOW_5) ? "[1] 250kbps\r\n" : disabled);
 
-    printf("%s Force PLL lock signal. Only used in test [PLL_LOCK]: ", regId);
+    printf("%010lu [%s] %s: %s Force PLL lock signal. Only used in test [PLL_LOCK]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, RF_SETUP_PLL_LOCK_4) ? enabled : disabled);
 
-    printf("%s Select between the high speed data rates. This bit is don't care if RF_DR_LOW is set [RF_DR_HIGH]: ", regId);
+    printf("%010lu [%s] %s: %s Select between the high speed data rates. This bit is don't care if RF_DR_LOW is set [RF_DR_HIGH]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, RF_SETUP_RF_DR_HIGH_3) ? "[1] 2Mbps\r\n" : "[0] 1Mbps\r\n");
 
-    printf("%s Set RF output power in TX mode [RF_PWR]: ", regId);
+    printf("%010lu [%s] %s: %s Set RF output power in TX mode [RF_PWR]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
 
     if (_CHECK_BIT(data, RF_SETUP_RF_PWR_2))
     {
@@ -930,8 +917,6 @@ void NRF24L01p::printRfSetupRegister()
             printf("[00] -18dBm\r\n");
         }
     }
-
-    printf("\r\n");
 }
 
 void NRF24L01p::printStatusRegister()
@@ -939,23 +924,21 @@ void NRF24L01p::printStatusRegister()
     uint8_t data = readRegister(STATUS);
     char regId[] = "[0x07]";
 
-    printf("%s Register [STATUS] Status Register:\r\n", regId);
-    char enabled[] = "[1] Enabled\r\n";
-    char disabled[] = "[0] Disabled\r\n";
+    printf("%010lu [%s] %s: %s Register [STATUS] Status Register:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
 
-    printf("%s Data Ready RX FIFO interrupt. Asserted when new data arrives RX FIFO [RX_DR]: ", regId);
+    printf("%010lu [%s] %s: %s Data Ready RX FIFO interrupt. Asserted when new data arrives RX FIFO [RX_DR]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, STATUS_RX_DR_6) ? "[1] data is ready" : "[0] no data");
     printf("\r\n");
 
-    printf("%s Data Ready TX FIFO interrupt. Asserted when packet transmitted on TX [TX_DS]: ", regId);
+    printf("%010lu [%s] %s: %s Data Ready TX FIFO interrupt. Asserted when packet transmitted on TX [TX_DS]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, STATUS_TX_DS_5) ? "[1] data is sent" : "[0] data is not sent");
     printf("\r\n");
 
-    printf("%s Maximum number of TX retransmits interrupt [MAX_RT]: ", regId);
+    printf("%010lu [%s] %s: %s Maximum number of TX retransmits interrupt [MAX_RT]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, STATUS_MAX_RT_4) ? "[1] max nr of retransmits reached" : "[0] not reatched the max nr of retransmits");
     printf("\r\n");
 
-    printf("%s Data pipe number for the payload available for reading from RX_FIFO [RX_P_NO]: ", regId);
+    printf("%010lu [%s] %s: %s Data pipe number for the payload available for reading from RX_FIFO [RX_P_NO]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     uint8_t rxPipeNumber = (data & (_BV(STATUS_RX_P_NO_3) | _BV(STATUS_RX_P_NO_2) | _BV(STATUS_RX_P_NO_1)) >> 1);
     printf("[%c%c%c] ",
            _CHECK_BIT(rxPipeNumber, 2) ? '1' : '0',
@@ -975,9 +958,8 @@ void NRF24L01p::printStatusRegister()
     }
     printf("\r\n");
 
-    printf("%s TX FIFO full flag [TX_FULL]: ", regId);
+    printf("%010lu [%s] %s: %s TX FIFO full flag [TX_FULL]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, STATUS_TX_FULL_0) ? "[1] TX FIFO is full" : "[0] Available locations in TX FIFO");
-    printf("\r\n");
     printf("\r\n");
 }
 
@@ -985,24 +967,21 @@ void NRF24L01p::printObserveTxRegister()
 {
     uint8_t data = readRegister(OBSERVE_TX);
     char regId[] = "[0x08]";
-    printf("%s Register [OBSERVE_TX] Transmit observe register:\r\n", regId);
+    printf("%010lu [%s] %s: %s Register [OBSERVE_TX] Transmit observe register:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
 
-    printf("%s Count lost packets [PLOS_CNT]: ", regId);
+    printf("%010lu [%s] %s: %s Count lost packets [PLOS_CNT]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     uint8_t plosCnt = (data & (_BV(OBSERVE_TX_PLOS_CNT_7) | _BV(OBSERVE_TX_PLOS_CNT_6) | _BV(OBSERVE_TX_PLOS_CNT_5) | _BV(OBSERVE_TX_PLOS_CNT_4))) >> 4;
     printf("%d\r\n", plosCnt);
 
-    printf("%s Count retransmitted packets [ARC_CNT]: ", regId);
+    printf("%010lu [%s] %s: %s Count retransmitted packets [ARC_CNT]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     uint8_t txArcCnt = (data & (_BV(OBSERVE_TX_ARC_CNT_3) | _BV(OBSERVE_TX_ARC_CNT_2) | _BV(OBSERVE_TX_ARC_CNT_1) | _BV(OBSERVE_TX_ARC_CNT_0)));
     printf("%d\r\n", txArcCnt);
-
-    printf("\r\n");
 }
 
 void NRF24L01p::printRpdRegister()
 {
     uint8_t data = readRegister(RPD);
-    printf("[0x09] Register [RPD]: %s\r\n", _CHECK_BIT(data, RPD_RPD) ? "[1] the received power is more than -64 dBm" : "[0] received power is less than -64 dBm");
-    printf("\r\n");
+    printf("%010lu [%s] %s: [0x09] Register [RPD]: %s\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, _CHECK_BIT(data, RPD_RPD) ? "[1] the received power is more than -64 dBm" : "[0] received power is less than -64 dBm");
 }
 
 void NRF24L01p::printReceiveAddressDataPipesRegister()
@@ -1013,21 +992,20 @@ void NRF24L01p::printReceiveAddressDataPipesRegister()
     printReceiveAddressDataPipe3Register();
     printReceiveAddressDataPipe4Register();
     printReceiveAddressDataPipe5Register();
-    printf("\r\n");
 }
 
 void NRF24L01p::printReceiveAddressDataPipe0Register()
 {
     uint8_t data[5];
     readRegister(RX_ADDR_P0, data, 5);
-    printf("[0x0A] Receive address data pipe 0 [RX_ADDR_P0]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data[0]);
+    printf("%010lu [%s] %s: [0x0A] Receive address data pipe 0 [RX_ADDR_P0]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data[0]);
 }
 
 void NRF24L01p::printReceiveAddressDataPipe1Register()
 {
     uint8_t data[5];
     readRegister(RX_ADDR_P1, data, 5);
-    printf("[0x0B] Receive address data pipe 1 [RX_ADDR_P1]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data[0]);
+    printf("%010lu [%s] %s: [0x0B] Receive address data pipe 1 [RX_ADDR_P1]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data[0]);
 }
 
 void NRF24L01p::printReceiveAddressDataPipe2Register()
@@ -1035,7 +1013,7 @@ void NRF24L01p::printReceiveAddressDataPipe2Register()
     uint8_t data[5];
     readRegister(RX_ADDR_P1, data, 5);
     uint8_t data2 = readRegister(RX_ADDR_P2);
-    printf("[0x0C] Receive address data pipe 2 [RX_ADDR_P2]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data2);
+    printf("%010lu [%s] %s: [0x0C] Receive address data pipe 2 [RX_ADDR_P2]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data2);
 }
 
 void NRF24L01p::printReceiveAddressDataPipe3Register()
@@ -1043,7 +1021,7 @@ void NRF24L01p::printReceiveAddressDataPipe3Register()
     uint8_t data[5];
     readRegister(RX_ADDR_P1, data, 5);
     uint8_t data2 = readRegister(RX_ADDR_P3);
-    printf("[0x0D] Receive address data pipe 3 [RX_ADDR_P3]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data2);
+    printf("%010lu [%s] %s: [0x0D] Receive address data pipe 3 [RX_ADDR_P3]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data2);
 }
 
 void NRF24L01p::printReceiveAddressDataPipe4Register()
@@ -1051,7 +1029,7 @@ void NRF24L01p::printReceiveAddressDataPipe4Register()
     uint8_t data[5];
     readRegister(RX_ADDR_P1, data, 5);
     uint8_t data2 = readRegister(RX_ADDR_P4);
-    printf("[0x0E] Receive address data pipe 4 [RX_ADDR_P4]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data2);
+    printf("%010lu [%s] %s: [0x0E] Receive address data pipe 4 [RX_ADDR_P4]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data2);
 }
 
 void NRF24L01p::printReceiveAddressDataPipe5Register()
@@ -1059,15 +1037,14 @@ void NRF24L01p::printReceiveAddressDataPipe5Register()
     uint8_t data[5];
     readRegister(RX_ADDR_P1, data, 5);
     uint8_t data2 = readRegister(RX_ADDR_P5);
-    printf("[0x0E] Receive address data pipe 5 [RX_ADDR_P5]: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data2);
+    printf("%010lu [%s] %s: [0x0E] Receive address data pipe 5 [RX_ADDR_P5]: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data2);
 }
 
 void NRF24L01p::printTransmitAddressRegister()
 {
     uint8_t data[5];
     readRegister(TX_ADDR, data, 5);
-    printf("[0x10] Register [TX_ADDR] Transmit address: 0x%02X%02X%02X%02X%02X\r\n", data[4], data[3], data[2], data[1], data[0]);
-    printf("\r\n");
+    printf("%010lu [%s] %s: [0x10] Register [TX_ADDR] Transmit address: 0x%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data[4], data[3], data[2], data[1], data[0]);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipesRegister()
@@ -1078,43 +1055,42 @@ void NRF24L01p::printReceiveNumberOfBytesInDataPipesRegister()
     printReceiveNumberOfBytesInDataPipe3Register();
     printReceiveNumberOfBytesInDataPipe4Register();
     printReceiveNumberOfBytesInDataPipe5Register();
-    printf("\r\n");
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe0Register()
 {
     uint8_t data = readRegister(RX_PW_P0);
-    printf("[0x11] Number of bytes in RX payload in data pipe 0 [RX_PW_P0]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x11] Number of bytes in RX payload in data pipe 0 [RX_PW_P0]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe1Register()
 {
     uint8_t data = readRegister(RX_PW_P1);
-    printf("[0x12] Number of bytes in RX payload in data pipe 1 [RX_PW_P1]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x12] Number of bytes in RX payload in data pipe 1 [RX_PW_P1]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe2Register()
 {
     uint8_t data = readRegister(RX_PW_P2);
-    printf("[0x13] Number of bytes in RX payload in data pipe 2 [RX_PW_P2]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x13] Number of bytes in RX payload in data pipe 2 [RX_PW_P2]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe3Register()
 {
     uint8_t data = readRegister(RX_PW_P3);
-    printf("[0x14] Number of bytes in RX payload in data pipe 3 [RX_PW_P3]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x14] Number of bytes in RX payload in data pipe 3 [RX_PW_P3]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe4Register()
 {
     uint8_t data = readRegister(RX_PW_P4);
-    printf("[0x15] Number of bytes in RX payload in data pipe 4 [RX_PW_P4]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x15] Number of bytes in RX payload in data pipe 4 [RX_PW_P4]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printReceiveNumberOfBytesInDataPipe5Register()
 {
     uint8_t data = readRegister(RX_PW_P5);
-    printf("[0x16] Number of bytes in RX payload in data pipe 5 [RX_PW_P5]: %d\r\n", data);
+    printf("%010lu [%s] %s: [0x16] Number of bytes in RX payload in data pipe 5 [RX_PW_P5]: %d\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, data);
 }
 
 void NRF24L01p::printFifoStatusRegister()
@@ -1122,29 +1098,26 @@ void NRF24L01p::printFifoStatusRegister()
     uint8_t data = readRegister(FIFO_STATUS);
     char regId[] = "[0x17]";
 
-    printf("%s Register [FIFO_STATUS] FIFO Status Register:\r\n", regId);
-    char enabled[] = "[1] Enabled\r\n";
-    char disabled[] = "[0] Disabled\r\n";
+    printf("%010lu [%s] %s: %s Register [FIFO_STATUS] FIFO Status Register:\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
 
-    printf("%s TX payload reuse is active until W_TX_PAYLOAD or FLUSH TX is executed [TX_REUSE]: ", regId);
+    printf("%010lu [%s] %s: %s TX payload reuse is active until W_TX_PAYLOAD or FLUSH TX is executed [TX_REUSE]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FIFO_STATUS_TX_REUSE_6) ? "[1] active" : "[0] not active");
     printf("\r\n");
 
-    printf("%s TX FIFO full flag [FIFO_FULL]: ", regId);
+    printf("%010lu [%s] %s: %s TX FIFO full flag [FIFO_FULL]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FIFO_STATUS_FIFO_FULL_5) ? "[1] TX FIFO full" : "[0] Available locations in TX FIFO");
     printf("\r\n");
 
-    printf("%s TX FIFO empty flag [TX_EMPTY]: ", regId);
+    printf("%010lu [%s] %s: %s TX FIFO empty flag [TX_EMPTY]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FIFO_STATUS_TX_EMPTY_4) ? "[1] TX FIFO empty" : "[0] Data in TX FIFO");
     printf("\r\n");
 
-    printf("%s RX FIFO full flag [RX_FULL]: ", regId);
+    printf("%010lu [%s] %s: %s RX FIFO full flag [RX_FULL]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FIFO_STATUS_RX_FULL_1) ? "[1] RX FIFO full" : "[0] Available locations in RX FIFO");
     printf("\r\n");
 
-    printf("%s RX FIFO empty flag [RX_EMPTY]: ", regId);
+    printf("%010lu [%s] %s: %s RX FIFO empty flag [RX_EMPTY]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FIFO_STATUS_RX_EMPTY_0) ? "[1] RX FIFO empty" : "[0] Data in RX FIFO");
-    printf("\r\n");
     printf("\r\n");
 }
 
@@ -1152,47 +1125,43 @@ void NRF24L01p::printEnableDynamicPayloadLenghtRegister()
 {
     uint8_t data = readRegister(DYNPD);
     char regId[] = "[0x1C]";
-    printf("%s Register [DYNPD] Enable dynamic payload length: \r\n", regId);
+    printf("%010lu [%s] %s: %s Register [DYNPD] Enable dynamic payload length: \r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     char enabled[] = "[1] Enabled\r\n";
     char disabled[] = "[0] Disabled\r\n";
 
-    printf("%s Enable dynamic payload length data pipe 5 [DPL_P5]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 5 [DPL_P5]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P5_5) ? enabled : disabled);
 
-    printf("%s Enable dynamic payload length data pipe 4 [DPL_P4]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 4 [DPL_P4]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P4_4) ? enabled : disabled);
 
-    printf("%s Enable dynamic payload length data pipe 3 [DPL_P3]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 3 [DPL_P3]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P3_3) ? enabled : disabled);
 
-    printf("%s Enable dynamic payload length data pipe 2 [DPL_P2]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 2 [DPL_P2]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P2_2) ? enabled : disabled);
 
-    printf("%s Enable dynamic payload length data pipe 1 [DPL_P1]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 1 [DPL_P1]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P1_1) ? enabled : disabled);
 
-    printf("%s Enable dynamic payload length data pipe 0 [DPL_P0]: ", regId);
+    printf("%010lu [%s] %s: %s Enable dynamic payload length data pipe 0 [DPL_P0]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, DYNPD_DPL_P0_0) ? enabled : disabled);
-
-    printf("\r\n");
 }
 
 void NRF24L01p::printFeatureRegister()
 {
     uint8_t data = readRegister(FEATURE);
     char regId[] = "[0x1D]";
-    printf("%s Register [FEATURE] Feature Register: \r\n", regId);
+    printf("%010lu [%s] %s: %s Register [FEATURE] Feature Register: \r\n", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     char enabled[] = "[1] Enabled\r\n";
     char disabled[] = "[0] Disabled\r\n";
 
-    printf("%s Enables Dynamic Payload Length [EN_DPL]: ", regId);
+    printf("%010lu [%s] %s: %s Enables Dynamic Payload Length [EN_DPL]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FEATURE_EN_DPL_2) ? enabled : disabled);
 
-    printf("%s Enables Payload with ACK [EN_ACK_PAY]: ", regId);
+    printf("%010lu [%s] %s: %s Enables Payload with ACK [EN_ACK_PAY]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FEATURE_EN_ACK_PAY_1) ? enabled : disabled);
 
-    printf("%s Enables the W_TX_PAYLOAD_NOACK command [EN_DYN_ACK]: ", regId);
+    printf("%010lu [%s] %s: %s Enables the W_TX_PAYLOAD_NOACK command [EN_DYN_ACK]: ", HAL_GetTick(), DEBUG, CLASS_NAME, regId);
     printf("%s", _CHECK_BIT(data, FEATURE_EN_DYN_ACK_0) ? enabled : disabled);
-
-    printf("\r\n");
 }

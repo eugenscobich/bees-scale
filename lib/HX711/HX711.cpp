@@ -1,6 +1,12 @@
 #include "HX711.h"
 #include <stdio.h>
 
+#define INFO  "INFO "
+#define DEBUG "DEBUG"
+#define WARN  "WARN "
+#define ERROR "ERROR"
+#define CLASS_NAME "HX711.cpp"
+
 HX711::HX711(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_HX711_DT_GPIOx, uint16_t _HX711_DT_GPIO_Pin,
              GPIO_TypeDef *_HX711_SCK_GPIOx, uint16_t _HX711_SCK_GPIO_Pin) : htim(_htim), HX711_DT_GPIOx(_HX711_DT_GPIOx),
                                                                              HX711_DT_GPIO_Pin(_HX711_DT_GPIO_Pin),
@@ -9,7 +15,7 @@ HX711::HX711(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_HX711_DT_GPIOx, uint16_t _
 {
 }
 
-void HX711::_hx711Delay(uint16_t time)
+void HX711::hx711Delay(uint16_t time)
 {
     __HAL_TIM_SET_COUNTER(htim, 0);
     while ((__HAL_TIM_GET_COUNTER(htim)) < time)
@@ -22,13 +28,13 @@ int32_t HX711::getValue()
 {
     uint32_t data = 0;
     uint32_t startTime = HAL_GetTick();
-    _setPinAsInput(HX711_DT_GPIOx, HX711_DT_GPIO_Pin);
+    setPinAsInput(HX711_DT_GPIOx, HX711_DT_GPIO_Pin);
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
     while (HAL_GPIO_ReadPin(HX711_DT_GPIOx, HX711_DT_GPIO_Pin) == GPIO_PIN_SET)
     {
         if (HAL_GetTick() - startTime > 600)
         {
-            printf("HX711: No response from sensor\r\n");
+            printf("%010lu [%s] %s: No response from sensor\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
             return 0;
         }
     }
@@ -37,7 +43,7 @@ int32_t HX711::getValue()
     {
         HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_SET);
         data = data << 1;
-        _hx711Delay(1);
+        hx711Delay(1);
         HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
         if (HAL_GPIO_ReadPin(HX711_DT_GPIOx, HX711_DT_GPIO_Pin))
         {
@@ -46,7 +52,7 @@ int32_t HX711::getValue()
     }
 
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_SET);
-    _hx711Delay(1);
+    hx711Delay(1);
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
 
     data = data ^ 0x800000;
@@ -103,13 +109,6 @@ float HX711::getWeight()
 // #############################################################################################
 void HX711::setCoeficient(float _coeficient)
 {
-    /*
-    if (_coeficient > 0) {
-        printf("HX711: Coeficient: %d.%02d\r\n", (int32_t)_coeficient, (uint16_t)(((uint16_t)(_coeficient * 100)) % 100));
-    } else {
-        printf("HX711: Coeficient: %d.%02d\r\n", (int32_t)_coeficient, (uint16_t)(((uint16_t)(_coeficient * -100)) % 100));
-    }
-    */
     coeficient = _coeficient;
 }
 // #############################################################################################
@@ -122,23 +121,22 @@ void HX711::powerDown()
 {
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_SET);
-    _nonBlockingDelay(1);
 }
 // #############################################################################################
 void HX711::powerUp()
 {
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_RESET);
-    _hx711Delay(100);
+    hx711Delay(100);
 }
 // #############################################################################################
 void HX711::disable()
 {
     HAL_GPIO_WritePin(HX711_SCK_GPIOx, HX711_SCK_GPIO_Pin, GPIO_PIN_SET);
-    _hx711Delay(100);
+    hx711Delay(100);
 }
 // #############################################################################################
 
-void HX711::_setPinAsInput(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
+void HX711::setPinAsInput(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = GPIO_Pin;
