@@ -1,6 +1,12 @@
 #include "DS18B20.h"
 #include <stdio.h>
 
+#define INFO  "INFO "
+#define DEBUG "DEBUG"
+#define WARN  "WARN "
+#define ERROR "ERROR"
+#define CLASS_NAME "DS18B20.c"
+
 DS18B20::DS18B20(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_DS18B20_DT_GPIOx, uint16_t _DS18B20_DT_GPIO_Pin) : htim(_htim),
                                                                                                              DS18B20_DT_GPIOx(_DS18B20_DT_GPIOx),
                                                                                                              DS18B20_DT_GPIO_Pin(_DS18B20_DT_GPIO_Pin)
@@ -121,7 +127,7 @@ bool DS18B20::readRom()
     {
         rom[j] = read();
     }
-    printf("DS18B20: Read Rom=%02X%02X%02X%02X%02X%02X%02X%02X\r\n", rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
+    printf("%010lu [%s] %s: Read Rom=%02X%02X%02X%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
     return verifyRomCrc();
 }
 
@@ -178,7 +184,8 @@ bool DS18B20::readScratchpad() {
     {
         scratchpad[i] = read();        
     }
-    printf("DS18B20: Read scratchpad=%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n", scratchpad[0], scratchpad[1], scratchpad[2], scratchpad[3], scratchpad[4], scratchpad[5], scratchpad[6], scratchpad[7], scratchpad[8]);
+    printf("%010lu [%s] %s: Read scratchpad=%02X%02X%02X%02X%02X%02X%02X%02X%02X\r\n", HAL_GetTick(), DEBUG, CLASS_NAME, 
+        scratchpad[0], scratchpad[1], scratchpad[2], scratchpad[3], scratchpad[4], scratchpad[5], scratchpad[6], scratchpad[7], scratchpad[8]);
     return verifyScratchpadCrc();
 }
 
@@ -235,7 +242,6 @@ bool DS18B20::_verifyCrc(uint8_t* bytes, uint8_t arrayLength) {
 			data >>= 1;
 		}
 	}
-    //printf("DS18B20: Calculated CRC=%02X\r\n", crc);
     return lastByte == crc;
 }
 
