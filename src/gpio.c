@@ -59,11 +59,11 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, NRF_CSN_Pin|SIM800C_DTR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, NRF_CE_Pin|HX711_SCK_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, NRF_CE_Pin|HX711_SCK_Pin|BATERY_LEVEL_CHECK_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, HX711_DT_1_Pin|HX711_DT_2_Pin|HX711_DT_3_Pin|HTU21D_1_Pin
-                          |HTU21D_2_Pin|HTU21D_3_Pin|GREEN_LED_Pin|BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
+                          |HTU21D_2_Pin|HTU21D_3_Pin|GREEN_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PtPin */
   GPIO_InitStruct.Pin = RED_LED_Pin;

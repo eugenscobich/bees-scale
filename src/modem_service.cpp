@@ -558,7 +558,7 @@ ModemServiceResultStatus ModemService::sendData(uint8_t sensorData[][32]) {
     strcat(data, "[");
     for (uint8_t i = 0; i < 3; i++)
     {
-        if(sensorsService->getSensors()[i].isPresent) {
+        if(sensorData[i][0] > 0) {
             char sensorDataJson[200];
             sprintf(sensorDataJson, "{\"id\"=\"%02X%02X%02X%02X%02X%02X%02X%02X\",\"tempOutside\"=\"%d.%02d\",\"weight\"=\"%d.%02d\",\"temp\"=\"%d.%02d\",\"humidity\"=\"%d.%02d\",\"bat\"=\"%d\"}",
                 sensorData[i][0],
@@ -573,7 +573,7 @@ ModemServiceResultStatus ModemService::sendData(uint8_t sensorData[][32]) {
                 sensorData[i][8],
                 sensorData[i][9],
                 //weight
-                (uint32_t)(sensorData[i][10] << 24 & sensorData[i][11] << 16 & sensorData[i][12] << 8 & sensorData[i][13]),
+                (uint32_t)(sensorData[i][10] << 24 | sensorData[i][11] << 16 | sensorData[i][12] << 8 | sensorData[i][13]),
                 sensorData[i][14],
                 //temp
                 sensorData[i][15],

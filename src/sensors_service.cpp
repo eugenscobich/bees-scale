@@ -40,6 +40,7 @@ void SensorsService::readSensors(uint8_t i) {
                 sensors[i].hx711->readRawValue(1);
                 printf("Sensor %d. Raw value: %d\r\n", i, sensors[i].hx711->getRawValue());
                 printf("Sensor %d. Weight: %d.%02d\r\n", i, (uint32_t)(sensors[i].hx711->getWeight()), (uint8_t)(((uint32_t)(sensors[i].hx711->getWeight() * 100)) % 100));
+                sensors[i].hx711->powerDown();
             }
             else
             {

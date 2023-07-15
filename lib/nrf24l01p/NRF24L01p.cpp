@@ -170,7 +170,8 @@ void NRF24L01p::init()
     HAL_Delay(5);
     reset();
     setRetries(5, 15);
-    setDataRate(NRF24L01p_1MBPS);
+    //setDataRate(NRF24L01p_1MBPS);
+    setDataRate(NRF24L01p_250KBPS);
     disableIRQForMaxRetry();
     disableIRQForTx();
     setPayloadSize(RX_PIPE_0, 32);
@@ -308,7 +309,7 @@ void NRF24L01p::readRxFifo(uint8_t *data)
     uint8_t cmd = R_RX_PAYLOAD;
     setCsnLow();
     SPI_Transmit(hspi, &cmd, 1);
-    SPI_Receive(hspi, data, sizeof(data));
+    SPI_Receive(hspi, data, 32);
     setCsnHigh();
 }
 
