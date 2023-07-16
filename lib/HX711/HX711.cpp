@@ -1,11 +1,7 @@
 #include "HX711.h"
 #include <stdio.h>
-
-#define INFO  "INFO "
-#define DEBUG "DEBUG"
-#define WARN  "WARN "
-#define ERROR "ERROR"
 #define CLASS_NAME "HX711.cpp"
+#include "log.h"
 
 HX711::HX711(TIM_HandleTypeDef *_htim, GPIO_TypeDef *_HX711_DT_GPIOx, uint16_t _HX711_DT_GPIO_Pin,
              GPIO_TypeDef *_HX711_SCK_GPIOx, uint16_t _HX711_SCK_GPIO_Pin) : htim(_htim), HX711_DT_GPIOx(_HX711_DT_GPIOx),
@@ -34,7 +30,7 @@ int32_t HX711::getValue()
     {
         if (HAL_GetTick() - startTime > 600)
         {
-            printf("%010lu [%s] %s: No response from sensor\r\n", HAL_GetTick(), ERROR, CLASS_NAME);
+            logError("No response from sensor\r\n");
             return 0;
         }
     }

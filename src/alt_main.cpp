@@ -17,11 +17,8 @@
 #include "time_service.h"
 #include <stdio.h>
 
-#define INFO  "INFO "
-#define DEBUG "DEBUG"
-#define WARN  "WARN "
-#define ERROR "ERROR"
 #define CLASS_NAME "alt_main."
+#include "log.h"
                     
 #define NRF_MASTER_ADDRESS (uint32_t)0x32AB12E7
 #define NRF_SLAVE_ADDRESS_1 (uint32_t)0x32AB12E8
@@ -104,14 +101,14 @@ int alt_main()
         if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
         {
             // TODO handle NRF IRQ, or alarm event
-            printf("%010lu [%s] %s: Waked Up by NRF\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+            logInfo("Waked Up by NRF\r\n");
             if (deviceIsMaster)
             {
-                printf("%010lu [%s] %s: Waked Up from NRF, but we are master, this is not expected!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Waked Up from NRF, but we are master, this is not expected!\r\n");
             }
             else
             {
-                printf("%010lu [%s] %s: It seems we were waked up by NRF IRQ\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("It seems we were waked up by NRF IRQ\r\n");
                 if (nRF24L01p.isDataReceived())
                 {
                     uint8_t i = 0;
@@ -121,7 +118,7 @@ int alt_main()
                         if (nRF24L01p.isDataReceived())
                         {
                             nRF24L01p.receive(data);
-                            printf("%010lu [%s] %s: Received ", HAL_GetTick(), INFO, CLASS_NAME);
+                            logInfo("Received ");
                             printData(data);
                             i++;
                             if (i == 3) {
@@ -130,7 +127,7 @@ int alt_main()
                         }
                         else if (startDelayTick + 200 < HAL_GetTick())
                         {
-                            printf("%010lu [%s] %s: Timeout Receive data\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                            logInfo("Timeout Receive data\r\n");
                             break;
                         }
                     }
@@ -141,17 +138,17 @@ int alt_main()
                 }
                 else
                 {
-                    printf("%010lu [%s] %s: NRF is UP but no data!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                    logInfo("NRF is UP but no data!\r\n");
                     goToStandByMode();
                 }
             }
         }
         else
         {
-            printf("%010lu [%s] %s: Waked Up by Alarm!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+            logInfo("Waked Up by Alarm!\r\n");
             if (deviceIsMaster)
             {
-                printf("%010lu [%s] %s: We are master let's start GSM, send master data and then send each slave data\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("We are master let's start GSM, send master data and then send each slave data\r\n");
 
                 ledService.blinkGreenLed(0, 300);
 
@@ -167,10 +164,10 @@ int alt_main()
 
                 modemResultStatus = modemService.sendData(sensorData);
                 
-                printf("%010lu [%s] %s: Master data was sent successful\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Master data was sent successful\r\n");
 
-                printf("%010lu [%s] %s: Ask Slave 1, Sensor one details.\r\n", HAL_GetTick(), INFO, CLASS_NAME);
-                printf("%010lu [%s] %s: Init NRF\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Ask Slave 1, Sensor one details.\r\n");
+                logInfo("Init NRF\r\n");
                 nRF24L01p.init();
                 nRF24L01p.enablePayloadWithAknoladge();
                 nRF24L01p.enableDynamicPayload(0);
@@ -180,7 +177,7 @@ int alt_main()
 
                 timeService.populateDataWithDateAndTime(data);
                 timeService.populateDataWithAlarmTimeFor(data, 30, SECONDS);
-                printf("%010lu [%s] %s: Send ", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Send ");
                 printData(data);
 
                 for (uint8_t i = 0; i < 3; i++)
@@ -191,24 +188,24 @@ int alt_main()
                         if (nRF24L01p.isDataAvailable())
                         {
                             nRF24L01p.receive(sensorData[i]);
-                            printf("%010lu [%s] %s: Received ", HAL_GetTick(), INFO, CLASS_NAME);
+                            logInfo("Received ");
                             printData(sensorData[i]);
                             nonBlockingDelay(40); // To allow slave to receive data and print it
                         }
                         else
                         {
-                            printf("%010lu [%s] %s: No Data\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                            logInfo("No Data\r\n");
                         }
                     }
                     else
                     {
-                        printf("%010lu [%s] %s: Send CMD failed: 0x%02X\r\n", HAL_GetTick(), INFO, CLASS_NAME, data[0]);
+                        logInfo("Send CMD failed: 0x%02X\r\n", data[0]);
                     }
                 }
 
                 nRF24L01p.powerDown();
                 modemResultStatus = modemService.sendData(sensorData);
-                printf("%010lu [%s] %s: Slave data was sent successful\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Slave data was sent successful\r\n");
                 modemService.powerDown();
                 timeService.setAlarmFor(30, SECONDS);
                 goToStandByMode();
@@ -221,13 +218,13 @@ int alt_main()
     }
     else if (!deviceWasWakedUpFromPower)
     {
-        printf("%010lu [%s] %s: Waked Up from reset!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+        logInfo("Waked Up from reset!\r\n");
         sensorsService.calibrateScales(isButtonPressed);
     }
     else
     {
         // TODO Check modem and power on if need
-        printf("%010lu [%s] %s: Waked Up from power on!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+        logInfo("Waked Up from power on!\r\n");
         if (deviceIsMaster)
         {
             ledService.blinkGreenLed(0, 300);
@@ -253,7 +250,7 @@ int alt_main()
             {
                 if (isButtonPressed)
                 {
-                    printf("%010lu [%s] %s: Button was pressed. Clear all SMS and wait for new settings\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                    logInfo("Button was pressed. Clear all SMS and wait for new settings\r\n");
                     modemResultStatus = modemService.deleteAllSMS();
                     handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");
                 }
@@ -266,7 +263,7 @@ int alt_main()
 
             if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND)
             {
-                printf("%010lu [%s] %s: Wasn't able to find Settings SMS. Wait for settings SMS\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+                logInfo("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
                 ledService.blinkGreenLed(0, 1000);
                 modemResultStatus = modemService.waitForSettingsSMS();
                 ledService.stopBlinkGreenLed();
@@ -295,12 +292,12 @@ int alt_main()
 }
 
 void initNrfOnPowerOn() {
-    printf("%010lu [%s] %s: We are slave, read sensors, enable radio, set ack packages and go to sleep to wait commands!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+    logInfo("We are slave, read sensors, enable radio, set ack packages and go to sleep to wait commands!\r\n");
     readSensorAndPopulateSensorData(0);
     readSensorAndPopulateSensorData(1);
     readSensorAndPopulateSensorData(2);
 
-    printf("%010lu [%s] %s: Init NRF\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+    printf("Init NRF\r\n");
     nRF24L01p.init();
     nRF24L01p.enablePayloadWithAknoladge();
     nRF24L01p.enableDynamicPayload(0);
@@ -309,11 +306,11 @@ void initNrfOnPowerOn() {
     nRF24L01p.printAllRegisters();
 
     nRF24L01p.flushTx();
-    printf("%010lu [%s] %s: TX is full: [%d], ", HAL_GetTick(), INFO, CLASS_NAME, nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[0], 32));
+    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[0], 32));
     printData(sensorData[0]);
-    printf("%010lu [%s] %s: TX is full: [%d], ", HAL_GetTick(), INFO, CLASS_NAME, nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[1], 32));
+    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[1], 32));
     printData(sensorData[1]);
-    printf("%010lu [%s] %s: TX is full: [%d], ", HAL_GetTick(), INFO, CLASS_NAME, nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[2], 32));
+    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[2], 32));
     printData(sensorData[2]);
 
     nRF24L01p.startListening();
@@ -328,10 +325,10 @@ float getCpuTemperature() {
     HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);   // poll for conversion
     uint16_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
     HAL_ADC_Stop(&hadc1);                      // stop adc
-    printf("%010lu [%s] %s: Raw adc value: %d\r\n", HAL_GetTick(), INFO, CLASS_NAME, value);
+    logInfo("Raw adc value: %d\r\n", value);
 
     float temp = ((((value * 3.3 / 4096) - 1.43) / 0.0043) + 25);
-    printf("%010lu [%s] %s: CPU Temp: %d\r\n", HAL_GetTick(), INFO, CLASS_NAME, (int16_t)(temp * 100.0));
+    logInfo("CPU Temp: %d\r\n", (int16_t)(temp * 100.0));
     return temp;
 }
 
@@ -343,10 +340,10 @@ uint8_t getSlaveBatteryLevel()
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);   // poll for conversion
     uint16_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
-    printf("%010lu [%s] %s: Raw adc value: %d\r\n", HAL_GetTick(), INFO, CLASS_NAME, value);
+    logInfo("Raw adc value: %d\r\n", value);
 
     uint32_t voltage = ((3.3 * value) / 4098) * 1000;
-    printf("%010lu [%s] %s: Voltage: %lu\r\n", HAL_GetTick(), INFO, CLASS_NAME, voltage);
+    logInfo("Voltage: %lu\r\n", voltage);
 
     HAL_ADC_Stop(&hadc1);                      // stop adc
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_SET);
@@ -365,7 +362,7 @@ uint8_t getSlaveBatteryLevel()
     832
     */
     uint8_t batteryLevel = (uint8_t)(((value - 2643.0) / 832.0) * 100);
-    printf("%010lu [%s] %s: Slave Battery level is: %d\r\n", HAL_GetTick(), INFO, CLASS_NAME, batteryLevel);
+    logInfo("Slave Battery level is: %d\r\n", batteryLevel);
 
     getCpuTemperature();
 
@@ -374,7 +371,7 @@ uint8_t getSlaveBatteryLevel()
 
 void readSensorAndPopulateSensorData(uint8_t i)
 {
-    printf("%010lu [%s] %s: Populate sensor %d data\r\n", HAL_GetTick(), INFO, CLASS_NAME, i);
+    logInfo("Populate sensor %d data\r\n", i);
     sensorsService.readSensors(i);
     if (sensorsService.getSensors()[i].isPresent) {
         for (uint8_t j = 0; j < 8; j++)
@@ -452,7 +449,7 @@ void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const c
 {
     if (modemResultStatus != MODEM_SUCCESS)
     {
-        printf("%010lu [%s] %s: Error: %s\r\n", HAL_GetTick(), INFO, CLASS_NAME, message);
+        logInfo("Error: %s\r\n", message);
         switch (modemResultStatus)
         {
         case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
@@ -500,34 +497,34 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void printDeviceInfo()
 {
-    printf("%010lu [%s] %s: =====================================================================================\r\n", HAL_GetTick(), INFO, CLASS_NAME);
-    printf("%010lu [%s] %s: Bees Scale Device powered by Eugen Scobich\r\n", HAL_GetTick(), INFO, CLASS_NAME);
-    printf("%010lu [%s] %s: Device Address: ", HAL_GetTick(), INFO, CLASS_NAME);
+    logInfo("=====================================================================================\r\n");
+    logInfo("Bees Scale Device powered by Eugen Scobich\r\n");
+    logInfo("Device Address: ");
     if (deviceIsMaster) {
         printf("0x%0lX\r\n", NRF_MASTER_ADDRESS);
     } else {
         printf("0x%0lX\r\n", NRF_SLAVE_ADDRESS_1);
     }
     
-    printf("%010lu [%s] %s: Device Mode: %s\r\n", HAL_GetTick(), INFO, CLASS_NAME, deviceIsMaster ? "Master" : "Slave");
-    printf("%010lu [%s] %s: Waked up from: %s\r\n", HAL_GetTick(), INFO, CLASS_NAME, deviceWasWakedUpFromStandby ? "Standby" : deviceWasWakedUpFromPower ? "Power On"
+    logInfo("Device Mode: %s\r\n", deviceIsMaster ? "Master" : "Slave");
+    logInfo("Waked up from: %s\r\n", deviceWasWakedUpFromStandby ? "Standby" : deviceWasWakedUpFromPower ? "Power On"
                                                                                                         : "Reset");
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 
-    printf("%010lu [%s] %s: Device Date: %02d.%02d.%02d\r\n", HAL_GetTick(), INFO, CLASS_NAME, localDate.Date, localDate.Month, localDate.Year);
-    printf("%010lu [%s] %s: Device Time: %02d:%02d:%02d\r\n", HAL_GetTick(), INFO, CLASS_NAME, localTime.Hours, localTime.Minutes, localTime.Seconds);
-    printf("%010lu [%s] %s: =====================================================================================\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+    logInfo("Device Date: %02d.%02d.%02d\r\n", localDate.Date, localDate.Month, localDate.Year);
+    logInfo("Device Time: %02d:%02d:%02d\r\n", localTime.Hours, localTime.Minutes, localTime.Seconds);
+    logInfo("=====================================================================================\r\n");
 }
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
-    printf("%010lu [%s] %s: Alarm!!!\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+    logInfo("Alarm!!!\r\n");
 }
 
 void goToStandByMode()
 {
-    printf("%010lu [%s] %s: Go to StandBy Mode\r\n", HAL_GetTick(), INFO, CLASS_NAME);
+    logInfo("Go to StandBy Mode\r\n");
     ledService.blinkGreenRedOrangeLedOneTime();
     HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);        // PWR->CR |= PWR_CR_CWUF;

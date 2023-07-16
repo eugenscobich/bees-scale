@@ -3,12 +3,8 @@
 #include <stdio.h>
 #include <cstring>
 #include <cstdarg>
-
-#define INFO  "INFO "
-#define DEBUG "DEBUG"
-#define WARN  "WARN "
-#define ERROR "ERROR"
 #define CLASS_NAME "SIM800C.c"
+#include "log.h"
 
 SIM800C::SIM800C(UART_HandleTypeDef* _huart, GPIO_TypeDef* _SIM800C_PWR_GPIOx, uint16_t _SIM800C_PWR_GPIO_Pin, GPIO_TypeDef* _SIM800C_DTR_GPIOx, uint16_t _SIM800C_DTR_GPIO_Pin, void(*_updateFunction)()):
     huart(_huart),
@@ -72,7 +68,7 @@ SIM800CCmdResult* SIM800C::_sendCmd(const char *cmd) {
                 }
                 updateFunction();
             }
-            printf("%010lu [%s] %s: TX(%d): %s\r\n", HAL_GetTick(), INFO, CLASS_NAME, sim800cCmdResult.retryCount, sim800cCmdResult.cmd);
+            logInfo("TX(%d): %s\r\n", sim800cCmdResult.retryCount, sim800cCmdResult.cmd);
             sim800cCmdResult.status = SIM800C_SUCCESS;
             return &sim800cCmdResult;
         } else {
@@ -80,7 +76,7 @@ SIM800CCmdResult* SIM800C::_sendCmd(const char *cmd) {
         }
     } else {
         tx_error:
-        printf("%010lu [%s] %s: TX FAIL(%d): %s\r\n", HAL_GetTick(), ERROR, CLASS_NAME, sim800cCmdResult.retryCount, sim800cCmdResult.cmd);
+        logError("TX FAIL(%d): %s\r\n", sim800cCmdResult.retryCount, sim800cCmdResult.cmd);
         sim800cCmdResult.status = SIM800C_ERROR;
         return &sim800cCmdResult;
     }
@@ -125,17 +121,17 @@ SIM800CCmdResult* SIM800C::_waitForMessage(const char *message, uint16_t receive
                 sim800cCmdResult.status = SIM800C_SUCCESS;
                 char* foundEndLine = strstr(foundMessage + strlen(message), "\r\n");
                 if (foundEndLine != NULL) {
-                    printf("%010lu [%s] %s: RX(%d): %s", HAL_GetTick(), INFO, CLASS_NAME, sim800cCmdResult.retryCount, (char *)sim800cCmdResult.rxBuffer);
+                    logInfo("RX(%d): %s", sim800cCmdResult.retryCount, (char *)sim800cCmdResult.rxBuffer);
                     return &sim800cCmdResult;
                 }
             } 
             if (_receiveTimeout == 0) {
                 if (numberOfRetries == sim800cCmdResult.retryCount) {
                     if (sim800cCmdResult.status == SIM800C_SUCCESS) {
-                        printf("%010lu [%s] %s: RX NO END(%d): %s", HAL_GetTick(), WARN, CLASS_NAME, sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
+                        logWarn("RX NO END(%d): %s", sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
                     } else {
                         sim800cCmdResult.status = SIM800C_TIMEOUT;
-                        printf("%010lu [%s] %s: RX TIMEOUT(%d): %s\r\n", HAL_GetTick(), ERROR, CLASS_NAME, sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
+                        logError("RX TIMEOUT(%d): %s\r\n", sim800cCmdResult.retryCount, (char*)sim800cCmdResult.rxBuffer);
                     }
                     return &sim800cCmdResult;
                 } else {
