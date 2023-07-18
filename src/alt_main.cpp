@@ -19,7 +19,7 @@
 
 #define CLASS_NAME "alt_main."
 #include "log.h"
-                    
+
 #define NRF_MASTER_ADDRESS (uint32_t)0x32AB12E7
 #define NRF_SLAVE_ADDRESS_1 (uint32_t)0x32AB12E8
 #define NRF_SLAVE_ADDRESS_2 (uint32_t)0x32AB12E9
@@ -31,6 +31,9 @@
 #define NRF_SLAVE_ADDRESS_8 (uint32_t)0x32AB12EF
 #define NRF_SLAVE_ADDRESS_9 (uint32_t)0x32AB12F1
 #define NRF_SLAVE_ADDRESS_10 (uint32_t)0632AB12F2
+
+#define SERVICE_ID 1
+#define SETTINGS_SMS_DIDN_T_RECIEVED_ERROR_CODE 1
 
 void update();
 
@@ -44,14 +47,17 @@ DS18B20 ds18B20_1(&htim1, HX711_DT_1_GPIO_Port, HX711_DT_1_Pin);
 DS18B20 ds18B20_2(&htim1, HX711_DT_2_GPIO_Port, HX711_DT_2_Pin);
 DS18B20 ds18B20_3(&htim1, HX711_DT_3_GPIO_Port, HX711_DT_3_Pin);
 
+void error(uint8_t serviceId, uint8_t errorCode);
+
 SensorsService sensorsService(&hx711_1, &hx711_2, &hx711_3, &ds18B20_1, &ds18B20_2, &ds18B20_3);
-ModemService modemService(&sim800c, &sensorsService, &update);
+ModemService modemService(&sim800c, &sensorsService, &update, &error);
 RadioService radioService(&nRF24L01p, &sensorsService, &update);
 
 LedService ledService;
 TimeService timeService;
 
 uint8_t data[32] = {0};
+uint8_t masterData[3][32] = {0};
 uint8_t sensorData[3][32] = {0};
 
 bool deviceIsMaster = false;
@@ -69,14 +75,13 @@ bool wakedUpFromStandby();
 bool wakedUpFromPower();
 bool wakedUpFromPinReset();
 bool wakedUpFromSoftware();
-void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char *message);
 void readSensorAndPopulateSensorData(uint8_t i);
 void sendData(uint8_t i);
 uint8_t getSlaveBatteryLevel();
 void printData(uint8_t *dataToPrint);
 
 void initNrfOnPowerOn();
-float getCpuTemperature() ;
+float getCpuTemperature();
 
 int alt_main()
 {
@@ -85,85 +90,65 @@ int alt_main()
     HAL_UART_Receive_IT(&huart2, uart2RxBuffer, 1);
 
     sim800c.init();
-    deviceIsMaster = modemService.isSIM800CPresent();
+    nRF24L01p.isPowerUp(); // hack to init SPI after sleep
+    deviceIsMaster = modemService.isModemPresent();
     deviceWasWakedUpFromStandby = wakedUpFromStandby();
     deviceWasWakedUpFromPower = wakedUpFromPower();
     printDeviceInfo();
-    ModemServiceResultStatus modemResultStatus;
-    /*
+
     // ===================================== Sandbox
-        
+
     // =====================================  Sandbox
-    */
+
     if (deviceWasWakedUpFromStandby)
     {
-        nRF24L01p.isPowerUp();
-        if (nRF24L01p.isPowerUp() && nRF24L01p.isInRxMode())
+        if (radioService.isRadioInRxMode())
         {
-            // TODO handle NRF IRQ, or alarm event
-            logInfo("Waked Up by NRF\r\n");
+            logInfo("Waked Up by Radio\r\n");
             if (deviceIsMaster)
             {
-                logInfo("Waked Up from NRF, but we are master, this is not expected!\r\n");
+                logError("Waked Up from Radio, but we are master, this is not expected\r\n");
+                goToStandByMode();
             }
             else
             {
-                logInfo("It seems we were waked up by NRF IRQ\r\n");
-                if (nRF24L01p.isDataReceived())
+                if (radioService.isDataReceived())
                 {
-                    uint8_t i = 0;
-                    startDelayTick = HAL_GetTick();
-                    while (true)
-                    {
-                        if (nRF24L01p.isDataReceived())
-                        {
-                            nRF24L01p.receive(data);
-                            logInfo("Received ");
-                            printData(data);
-                            i++;
-                            if (i == 3) {
-                                break; // waits up to 3 requests
-                            }
-                        }
-                        else if (startDelayTick + 200 < HAL_GetTick())
-                        {
-                            logInfo("Timeout Receive data\r\n");
-                            break;
-                        }
-                    }
-                    timeService.setDateAndTime(data);
-                    timeService.setAlarmTime(data);
-                    nRF24L01p.powerDown();
+                    radioService.readMasterData(masterData);
+                    timeService.setDateAndTime(masterData[0]);
+                    timeService.setAlarmTime(masterData[0]);
+                    radioService.powerDown();
                     goToStandByMode();
                 }
                 else
                 {
-                    logInfo("NRF is UP but no data!\r\n");
+                    logWarn("Radio is UP but there is no data\r\n");
                     goToStandByMode();
                 }
             }
         }
         else
         {
-            logInfo("Waked Up by Alarm!\r\n");
+            logInfo("Waked up by alarm\r\n");
             if (deviceIsMaster)
             {
                 logInfo("We are master let's start GSM, send master data and then send each slave data\r\n");
 
-                ledService.blinkGreenLed(0, 300);
+                ledService.blinkGreenLed(0, 400);
 
-                modemResultStatus = modemService.startModemIfNeed();
-                modemResultStatus = modemService.checkModemHealth();
+                modemService.startModemIfNeed();
+                modemService.checkModemHealth();
                 modemService.disablePowerOnPin();
-                modemResultStatus = modemService.configureModem();
-                modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
+
+                modemService.configureModem();
+                modemService.findSMSWithSettingsAndConfigureModem();
 
                 readSensorAndPopulateSensorData(0);
                 readSensorAndPopulateSensorData(1);
                 readSensorAndPopulateSensorData(2);
 
-                modemResultStatus = modemService.sendData(sensorData);
-                
+                modemService.sendData(sensorData);
+
                 logInfo("Master data was sent successful\r\n");
 
                 logInfo("Ask Slave 1, Sensor one details.\r\n");
@@ -204,7 +189,7 @@ int alt_main()
                 }
 
                 nRF24L01p.powerDown();
-                modemResultStatus = modemService.sendData(sensorData);
+                modemService.sendData(sensorData);
                 logInfo("Slave data was sent successful\r\n");
                 modemService.powerDown();
                 timeService.setAlarmFor(30, SECONDS);
@@ -228,54 +213,32 @@ int alt_main()
         if (deviceIsMaster)
         {
             ledService.blinkGreenLed(0, 300);
-
-            modemResultStatus = modemService.startModemIfNeed();
-            handleModemResultStatus(modemResultStatus, "Wasn't able to start SIM800C module");
-
-            if (modemResultStatus == MODEM_SUCCESS)
-            {
-                modemResultStatus = modemService.checkModemHealth();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to check modem health");
-            }
-
+            modemService.startModemIfNeed();
+            modemService.checkModemHealth();
             modemService.disablePowerOnPin();
-
-            if (modemResultStatus == MODEM_SUCCESS)
+            modemService.configureModem();
+            if (isButtonPressed)
             {
-                modemResultStatus = modemService.configureModem();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to configure modem");
+                logInfo("Button was pressed. Clear all SMS and wait for new settings\r\n");
+                modemService.deleteAllSMS();
             }
 
-            if (modemResultStatus == MODEM_SUCCESS)
+            modemService.findSMSWithSettingsAndConfigureModem();
+
+            if (!modemService.isSettingsSMSFound())
             {
-                if (isButtonPressed)
+                logWarn("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
+                ledService.blinkGreenLed(0, 1000);
+                modemService.waitForSettingsSMS();
+                ledService.stopBlinkGreenLed();
+                if (!modemService.isSettingsSMSFound())
                 {
-                    logInfo("Button was pressed. Clear all SMS and wait for new settings\r\n");
-                    modemResultStatus = modemService.deleteAllSMS();
-                    handleModemResultStatus(modemResultStatus, "Wasn't able to delete all SMS");
+                    logError("Settings SMS didn't recieved\r\n");
+                    error(SERVICE_ID, SETTINGS_SMS_DIDN_T_RECIEVED_ERROR_CODE);
                 }
             }
 
-            if (modemResultStatus == MODEM_SUCCESS)
-            {
-                modemResultStatus = modemService.findSMSWithSettingsAndConfigureModem();
-            }
-
-            if (modemResultStatus == MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND)
-            {
-                logInfo("Wasn't able to find Settings SMS. Wait for settings SMS\r\n");
-                ledService.blinkGreenLed(0, 1000);
-                modemResultStatus = modemService.waitForSettingsSMS();
-                ledService.stopBlinkGreenLed();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to receive settings SMS");
-            }
-
-            if (modemResultStatus == MODEM_SUCCESS)
-            {
-                modemResultStatus = modemService.configureDateAndTime();
-                handleModemResultStatus(modemResultStatus, "Wasn't able to configure date and time");
-            }
-
+            modemService.configureDateAndTime();
             timeService.setAlarmFor(10, SECONDS);
             goToStandByMode();
         }
@@ -291,7 +254,8 @@ int alt_main()
     }
 }
 
-void initNrfOnPowerOn() {
+void initNrfOnPowerOn()
+{
     logInfo("We are slave, read sensors, enable radio, set ack packages and go to sleep to wait commands!\r\n");
     readSensorAndPopulateSensorData(0);
     readSensorAndPopulateSensorData(1);
@@ -317,14 +281,15 @@ void initNrfOnPowerOn() {
     goToStandByMode();
 }
 
-float getCpuTemperature() {
-    //HAL_ADCEx_Calibration_Start(&hadc1);
+float getCpuTemperature()
+{
+    // HAL_ADCEx_Calibration_Start(&hadc1);
     Set_ADC1_Channel(ADC_CHANNEL_TEMPSENSOR);
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
     HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);   // poll for conversion
-    uint16_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
-    HAL_ADC_Stop(&hadc1);                      // stop adc
+    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY); // poll for conversion
+    uint16_t value = HAL_ADC_GetValue(&hadc1);        // get the adc value
+    HAL_ADC_Stop(&hadc1);                             // stop adc
     logInfo("Raw adc value: %d\r\n", value);
 
     float temp = ((((value * 3.3 / 4096) - 1.43) / 0.0043) + 25);
@@ -334,18 +299,18 @@ float getCpuTemperature() {
 
 uint8_t getSlaveBatteryLevel()
 {
-    //HAL_ADCEx_Calibration_Start(&hadc1);
+    // HAL_ADCEx_Calibration_Start(&hadc1);
     Set_ADC1_Channel(ADC_CHANNEL_1);
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_RESET);
     HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);   // poll for conversion
-    uint16_t value = HAL_ADC_GetValue(&hadc1); // get the adc value
+    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY); // poll for conversion
+    uint16_t value = HAL_ADC_GetValue(&hadc1);        // get the adc value
     logInfo("Raw adc value: %d\r\n", value);
 
     uint32_t voltage = ((3.3 * value) / 4098) * 1000;
     logInfo("Voltage: %lu\r\n", voltage);
 
-    HAL_ADC_Stop(&hadc1);                      // stop adc
+    HAL_ADC_Stop(&hadc1); // stop adc
     HAL_GPIO_WritePin(BATERY_LEVEL_CHECK_GPIO_Port, BATERY_LEVEL_CHECK_Pin, GPIO_PIN_SET);
     /*
     BAT      					4.2		3.2
@@ -373,7 +338,8 @@ void readSensorAndPopulateSensorData(uint8_t i)
 {
     logInfo("Populate sensor %d data\r\n", i);
     sensorsService.readSensors(i);
-    if (sensorsService.getSensors()[i].isPresent) {
+    if (sensorsService.getSensors()[i].isPresent)
+    {
         for (uint8_t j = 0; j < 8; j++)
         {
             sensorData[i][j] = sensorsService.getSensors()[i].ds18b20->getRom()[j]; // ROM
@@ -383,16 +349,16 @@ void readSensorAndPopulateSensorData(uint8_t i)
 
         uint32_t weight = (uint32_t)(sensorsService.getSensors()[i].hx711->getWeight());
 
-        sensorData[i][10] = (uint8_t)(weight >> 24);                                                                      // WEIGHT  0xA1B2C3D4 -> 0xA1
-        sensorData[i][11] = (uint8_t)((weight >> 16) & 0xFF);                                                             // WEIGHT  0xA1B2C3D4 -> 0xA1B2 -> 0xB2
-        sensorData[i][12] = (uint8_t)((weight >> 8) & 0xFF);                                                              // WEIGHT  0xA1B2C3D4 -> 0xA1B2C3 -> 0xC3
-        sensorData[i][13] = (uint8_t)(weight & 0xFF);                                                                     // WEIGHT  0xA1B2C3D4 -> 0xA1B2C3D4 -> 0xD4
-        sensorData[i][14] = (uint8_t)(((uint32_t)(sensorsService.getSensors()[i].hx711->getWeight() * 100)) % 100);       // WEIGHT
+        sensorData[i][10] = (uint8_t)(weight >> 24);                                                                // WEIGHT  0xA1B2C3D4 -> 0xA1
+        sensorData[i][11] = (uint8_t)((weight >> 16) & 0xFF);                                                       // WEIGHT  0xA1B2C3D4 -> 0xA1B2 -> 0xB2
+        sensorData[i][12] = (uint8_t)((weight >> 8) & 0xFF);                                                        // WEIGHT  0xA1B2C3D4 -> 0xA1B2C3 -> 0xC3
+        sensorData[i][13] = (uint8_t)(weight & 0xFF);                                                               // WEIGHT  0xA1B2C3D4 -> 0xA1B2C3D4 -> 0xD4
+        sensorData[i][14] = (uint8_t)(((uint32_t)(sensorsService.getSensors()[i].hx711->getWeight() * 100)) % 100); // WEIGHT
 
-        sensorData[i][15] = 29;                                                                                           // temp2
-        sensorData[i][16] = 10;                                                                                           // temp2
-        sensorData[i][17] = 50;                                                                                           // HUMEDITY
-        sensorData[i][18] = 25;                                                                                           // HUMEDITY
+        sensorData[i][15] = 29; // temp2
+        sensorData[i][16] = 10; // temp2
+        sensorData[i][17] = 50; // HUMEDITY
+        sensorData[i][18] = 25; // HUMEDITY
         if (deviceIsMaster)
         {
             sensorData[i][19] = modemService.getBatteryLevel(); // BATTERY LEVEL 0 - 100
@@ -401,7 +367,9 @@ void readSensorAndPopulateSensorData(uint8_t i)
         {
             sensorData[i][19] = getSlaveBatteryLevel();
         }
-    } else {
+    }
+    else
+    {
         for (uint8_t j = 0; j < 32; j++)
         {
             sensorData[i][j] = 0;
@@ -418,7 +386,8 @@ void sendData(uint8_t i)
     nRF24L01p.startListening();
 }
 
-void printData(uint8_t *dataToPrint) {
+void printData(uint8_t *dataToPrint)
+{
     printf("Data: 0x");
     for (uint8_t i = 0; i < 32; i++)
     {
@@ -445,33 +414,13 @@ void update()
     ledService.update();
 }
 
-void handleModemResultStatus(ModemServiceResultStatus modemResultStatus, const char *message)
+void error(uint8_t serviceId, uint8_t errorCode)
 {
-    if (modemResultStatus != MODEM_SUCCESS)
-    {
-        logInfo("Error: %s\r\n", message);
-        switch (modemResultStatus)
-        {
-        case MODEM_ERROR_IT_DIDN_T_REPONSD_AFTER_POWER_ON:
-            ledService.blinkGreenLed(2);
-            break;
-        case MODEM_ERROR_SETTINGS_SMS_WASN_T_FOUND:
-            ledService.blinkGreenLed(3);
-            break;
-        case MODEM_ERROR_RECEIVED_SMS_DOESN_T_CONTAINS_SETTINGS:
-            ledService.blinkGreenLed(4);
-            break;
-        case MODEM_ERROR_SMS_RECEIVED_TIMEOUT:
-            ledService.blinkGreenLed(5);
-            break;
-        case MODEM_ERROR_COULD_NOT_START_GPRS:
-            ledService.blinkGreenLed(6);
-            break;
-        default:
-            ledService.blinkGreenLed(1);
-            break;
-        }
-    }
+    logError("Error %u in service: %u\r\n", errorCode, serviceId);
+    ledService.blinkRedAndOrangeLed(serviceId, errorCode, 400, 3000);
+    nonBlockingDelay(30000);
+    timeService.setAlarmFor(1, MINUTES);
+    goToStandByMode();
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -500,15 +449,18 @@ void printDeviceInfo()
     logInfo("=====================================================================================\r\n");
     logInfo("Bees Scale Device powered by Eugen Scobich\r\n");
     logInfo("Device Address: ");
-    if (deviceIsMaster) {
+    if (deviceIsMaster)
+    {
         printf("0x%0lX\r\n", NRF_MASTER_ADDRESS);
-    } else {
+    }
+    else
+    {
         printf("0x%0lX\r\n", NRF_SLAVE_ADDRESS_1);
     }
-    
+
     logInfo("Device Mode: %s\r\n", deviceIsMaster ? "Master" : "Slave");
     logInfo("Waked up from: %s\r\n", deviceWasWakedUpFromStandby ? "Standby" : deviceWasWakedUpFromPower ? "Power On"
-                                                                                                        : "Reset");
+                                                                                                         : "Reset");
     RTC_TimeTypeDef localTime = HAL_RTC_GetLocalTime();
     RTC_DateTypeDef localDate = HAL_RTC_GetLocalDate();
 

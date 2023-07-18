@@ -6,6 +6,20 @@ LedService::LedService() {}
 
 void LedService::update() {
     uint32_t currentTick = HAL_GetTick();
+
+
+    if (redAndOrangeLedStarted) {
+        if (!greenLedStarted && redLedCurrentBlink == redAndOrangeRedLedNumberOfBlinks * 2) {
+            greenLedStarted = true;
+            greenLedPoused = false;
+            greenLedCurrentBlink = 0;
+            greenLedPreviousTick = redLedPreviousTick;
+        }
+        if (greenLedStarted && greenLedPoused) {
+            greenLedStarted = false;
+        }
+    }
+
     if (greenLedStarted) {
         if (greenLedPoused) {
             HAL_GPIO_WritePin(GREEN_LED_GPIO_Port, GREEN_LED_Pin, GPIO_PIN_RESET);
@@ -27,6 +41,29 @@ void LedService::update() {
             }
         }
     }
+
+    if (redLedStarted) {
+        if (redLedPoused) {
+            HAL_GPIO_WritePin(RED_LED_GPIO_Port, RED_LED_Pin, GPIO_PIN_RESET);
+            if (redLedPreviousTick + redLedPouseIntervalInTicks < currentTick) {
+                redLedPoused = false;
+                redLedCurrentBlink = 0;
+                redLedPreviousTick = currentTick;
+            }
+        } else {
+            if (redLedPreviousTick + redLedBlinkIntervalInTicks < currentTick) {
+                HAL_GPIO_TogglePin(RED_LED_GPIO_Port, RED_LED_Pin);
+                redLedPreviousTick = currentTick;
+                if (redLedNumberOfToggle != 0) {
+                    redLedCurrentBlink++;
+                    if (redLedCurrentBlink == redLedNumberOfToggle) {
+                        redLedPoused = true;
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 void LedService::blinkGreenLed(uint8_t nuberOfBlinks, uint16_t intervalInTicks, uint16_t pouseIntervalInTicks) {
@@ -46,6 +83,44 @@ void LedService::stopBlinkGreenLed() {
     greenLedNumberOfToggle = 0;
     greenLedStarted = false;
     greenLedPoused = false;
+}
+
+void LedService::blinkRedLed(uint8_t nuberOfBlinks, uint16_t intervalInTicks, uint16_t pouseIntervalInTicks) {
+    HAL_GPIO_WritePin(RED_LED_GPIO_Port, RED_LED_Pin, GPIO_PIN_RESET);
+    redLedBlinkIntervalInTicks = intervalInTicks;
+    redLedNumberOfToggle = nuberOfBlinks * 2;
+    redLedPouseIntervalInTicks = pouseIntervalInTicks;
+    redLedStarted = true;
+    redLedPoused = false;
+    redLedPreviousTick = HAL_GetTick();
+}
+
+void LedService::stopBlinkRedLed() {
+    HAL_GPIO_WritePin(RED_LED_GPIO_Port, RED_LED_Pin, GPIO_PIN_RESET);
+    redLedBlinkIntervalInTicks = 0;
+    redLedPouseIntervalInTicks = 0;
+    redLedNumberOfToggle = 0;
+    redLedStarted = false;
+    redLedPoused = false;
+}
+
+void LedService::blinkRedAndOrangeLed(uint8_t nuberOfRedBlinks, uint8_t nuberOfOrangeBlinks, uint16_t intervalInTicks, uint16_t pouseIntervalInTicks) {
+    redAndOrangeRedLedNumberOfBlinks = nuberOfRedBlinks;
+    redAndOrangeLedStarted = true;
+    redAndOrangeLedPoused = false;
+
+    blinkRedLed(nuberOfRedBlinks + nuberOfOrangeBlinks, intervalInTicks, pouseIntervalInTicks);
+    blinkGreenLed(nuberOfOrangeBlinks, intervalInTicks, pouseIntervalInTicks);
+    greenLedStarted = false;
+}
+
+void LedService::stopBlinkRedAndOrangeLed() {
+    redAndOrangeRedLedNumberOfBlinks = 0;
+    redAndOrangeOrangeLedNumberOfBlinks = 0;
+    redAndOrangeLedPoused = 0;
+
+    stopBlinkRedLed();
+    stopBlinkGreenLed();
 }
 
 
