@@ -280,14 +280,56 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 7 */
-  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-  if (hcdc->TxState != 0){
-    return USBD_BUSY;
+
+  // Check if USB interface is online and VCP connection is open.
+  // prior to send:
+  if ((hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
+          || (hUsbDeviceFS.ep0_state == USBD_EP0_STATUS_IN))
+  {
+      // The physical connection fails.
+      // Or: The phycical connection is open, but no VCP link up.
+      result = USBD_FAIL + 4;
   }
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
-  result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+  else
+  {
+
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
+
+    // Busy wait if USB is busy or exit on success or disconnection happens
+    while(1)
+    {
+
+        //Check if USB went offline while retrying
+        if ((hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
+                    || (hUsbDeviceFS.ep0_state == USBD_EP0_STATUS_IN))
+        {
+            result = USBD_FAIL + 3;
+            break;
+        }
+
+        // Try send
+        result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+        if(result == USBD_OK)
+        {
+            break;
+        }
+        else if(result == USBD_BUSY)
+        {
+            result = USBD_BUSY;
+            break;
+        }
+        else
+        {
+            // Any other failure
+            result = USBD_FAIL;
+            break;
+        }
+
+    }
+  }
+
   /* USER CODE END 7 */
-  return result;
+  return result + 100;
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
