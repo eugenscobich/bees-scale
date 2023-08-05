@@ -33,10 +33,10 @@ public:
     void update();
     void blinkGreenLed(uint8_t numberOfBlinks = 0, uint16_t intervalInTicks = 200, uint16_t pouseIntervalInTicks = 2000);
     void blinkRedLed(uint8_t numberOfBlinks = 0, uint16_t intervalInTicks = 200, uint16_t pouseIntervalInTicks = 2000);
-    void blinkRedAndOrangeLed(uint8_t numberOfRedBlinks = 0, uint8_t numberOfOrangeBlinks = 0, uint16_t intervalInTicks = 200, uint16_t pouseIntervalInTicks = 2000);
+    void blinkErrorCode(uint8_t errorCode, uint16_t intervalInTicks = 400, uint16_t pouseIntervalInTicks = 300);
     void stopBlinkGreenLed();
     void stopBlinkRedLed();
-    void stopBlinkRedAndOrangeLed();
+    void stopBlinkErrorCode();
     
     void blinkGreenRedOrangeLedOneTime();
 };

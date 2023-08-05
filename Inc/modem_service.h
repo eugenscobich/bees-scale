@@ -17,7 +17,7 @@ private:
     SIM800C* sim800c;
     SensorsService* sensorsService;
     void(*updateFunction)();
-    void(*errorFunction)(uint8_t, uint8_t);
+    void(*errorFunction)(uint8_t);
 
     SIM800CCmdResult* sim800cResult;
     uint32_t startDelayTick;
@@ -40,7 +40,7 @@ private:
     void openBearer();
 
 public:
-    ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*updateFunction)(), void(*errorFunction)(uint8_t, uint8_t));
+    ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*updateFunction)(), void(*errorFunction)(uint8_t));
     bool isModemPresent();
     void startModemIfNeed();
     void checkModemHealth();

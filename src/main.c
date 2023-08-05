@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define USB_BUFFER_SIZE 1024
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -53,7 +53,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t usbBuffer[USB_BUFFER_SIZE];
+uint16_t usbBufferPointer;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -187,9 +188,14 @@ PUTCHAR_PROTOTYPE {
   }
   */
   HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-  uint8_t result[1];
-  result[0] = CDC_Transmit_FS((uint8_t *)&ch, 1);
-  HAL_UART_Transmit(&huart2, result, 1, HAL_MAX_DELAY);
+  usbBuffer[usbBufferPointer++] = (uint8_t)ch;
+  uint8_t sendToUSBResult = CDC_Transmit_FS(usbBuffer, usbBufferPointer);
+  if (sendToUSBResult == USBD_OK) {
+    usbBufferPointer = 0;
+  }
+  if (usbBufferPointer == USB_BUFFER_SIZE) {
+    usbBufferPointer = 0;
+  }
   return ch;
 }
 

@@ -6,6 +6,7 @@
 #include "usart.h"
 #include "rtc.h"
 #include "tim.h"
+#include "usb_device.h"
 #include "NRF24L01p.h"
 #include "SIM800C.h"
 #include "HX711.h"
@@ -16,6 +17,7 @@
 #include "radio_service.h"
 #include "time_service.h"
 #include <stdio.h>
+#include "error_codes.h"
 
 #define CLASS_NAME "alt_main."
 #include "log.h"
@@ -32,8 +34,6 @@
 #define NRF_SLAVE_ADDRESS_9 (uint32_t)0x32AB12F1
 #define NRF_SLAVE_ADDRESS_10 (uint32_t)0632AB12F2
 
-#define SERVICE_ID 1
-#define SETTINGS_SMS_DIDN_T_RECIEVED_ERROR_CODE 1
 
 void update();
 
@@ -47,7 +47,7 @@ DS18B20 ds18B20_1(&htim1, HX711_DT_1_GPIO_Port, HX711_DT_1_Pin);
 DS18B20 ds18B20_2(&htim1, HX711_DT_2_GPIO_Port, HX711_DT_2_Pin);
 DS18B20 ds18B20_3(&htim1, HX711_DT_3_GPIO_Port, HX711_DT_3_Pin);
 
-void error(uint8_t serviceId, uint8_t errorCode);
+void error(uint8_t errorCode);
 
 SensorsService sensorsService(&hx711_1, &hx711_2, &hx711_3, &ds18B20_1, &ds18B20_2, &ds18B20_3);
 ModemService modemService(&sim800c, &sensorsService, &update, &error);
@@ -234,7 +234,7 @@ int alt_main()
                 if (!modemService.isSettingsSMSFound())
                 {
                     logError("Settings SMS didn't recieved\r\n");
-                    error(SERVICE_ID, SETTINGS_SMS_DIDN_T_RECIEVED_ERROR_CODE);
+                    error(SETTINGS_SMS_DIDN_T_RECIEVED_ERROR_CODE);
                 }
             }
 
@@ -414,11 +414,11 @@ void update()
     ledService.update();
 }
 
-void error(uint8_t serviceId, uint8_t errorCode)
+void error(uint8_t errorCode)
 {
-    logError("Error %u in service: %u\r\n", errorCode, serviceId);
-    ledService.blinkRedAndOrangeLed(serviceId, errorCode, 400, 3000);
-    nonBlockingDelay(30000);
+    logError("Error %u\r\n", errorCode);
+    ledService.blinkErrorCode(errorCode, 400, 3000);
+    nonBlockingDelay(errorCode * 400 * 3 + 3* 3000);
     timeService.setAlarmFor(1, MINUTES);
     goToStandByMode();
 }
@@ -478,6 +478,9 @@ void goToStandByMode()
 {
     logInfo("Go to StandBy Mode\r\n");
     ledService.blinkGreenRedOrangeLedOneTime();
+
+    MX_USB_DEVICE_DeInit();
+
     HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);        // PWR->CR |= PWR_CR_CWUF;
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);        // PWR->CR |= PWR_CR_CSBF;

@@ -104,17 +104,17 @@ void LedService::stopBlinkRedLed() {
     redLedPoused = false;
 }
 
-void LedService::blinkRedAndOrangeLed(uint8_t nuberOfRedBlinks, uint8_t nuberOfOrangeBlinks, uint16_t intervalInTicks, uint16_t pouseIntervalInTicks) {
-    redAndOrangeRedLedNumberOfBlinks = nuberOfRedBlinks;
+void LedService::blinkErrorCode(uint8_t errorCode, uint16_t intervalInTicks, uint16_t pouseIntervalInTicks) {
+    redAndOrangeRedLedNumberOfBlinks = errorCode / 10;
     redAndOrangeLedStarted = true;
     redAndOrangeLedPoused = false;
 
-    blinkRedLed(nuberOfRedBlinks + nuberOfOrangeBlinks, intervalInTicks, pouseIntervalInTicks);
-    blinkGreenLed(nuberOfOrangeBlinks, intervalInTicks, pouseIntervalInTicks);
+    blinkRedLed(errorCode, intervalInTicks, pouseIntervalInTicks);
+    blinkGreenLed(errorCode % 10, intervalInTicks, pouseIntervalInTicks);
     greenLedStarted = false;
 }
 
-void LedService::stopBlinkRedAndOrangeLed() {
+void LedService::stopBlinkErrorCode() {
     redAndOrangeRedLedNumberOfBlinks = 0;
     redAndOrangeOrangeLedNumberOfBlinks = 0;
     redAndOrangeLedPoused = 0;

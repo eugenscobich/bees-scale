@@ -3,30 +3,12 @@
 #include <stdio.h>
 #include <cstring>
 #include "led_service.h"
-
-#define SERVICE_ID 2
-#define MODEM_COULD_NOT_ACCEPT_AT_COMMAND_ERROR_CODE 1
-#define COULD_NOT_DISABLE_MODEM_ECHO_ERROR_CODE 2
-#define COULD_NOT_ENABLE_FULL_FUNCTIONALITY_ERROR_CODE 3
-#define COULD_NOT_READ_SIM_INFORMATION_ERROR_CODE 4
-#define COULD_NOT_CHECK_IF_THE_SIM_IS_LOCKED_ERROR_CODE 5
-#define COULD_NOT_CHECK_IF_THE_MODEM_IS_REISTERED_ERROR_CODE 6
-#define COULD_NOT_CHECK_THE_SIGNAL_QUALITY_ERROR_CODE 7
-#define WASN_T_ABLE_TO_FIND_SIGNAL_QUALITY_IN_THE_RESPONSE_ERROR_CODE 8
-#define COULD_NOT_CHECK_BATTERY_LEVEL_ERROR_CODE 9
-#define WASN_T_ABLE_TO_FIND_IF_BATTERY_IS_CHRAGING_OR_NOT_ERROR_CODE 10
-#define WASN_T_ABLE_TO_FIND_BATTERY_LEVEL_ERROR_CODE 11
-#define WASN_T_ABLE_TO_FIND_BATTERY_VOLTAGE_ERROR_CODE 12
-#define COULD_NOT_CONFIGURE_SMS_TO_WORK_IN_TEXT_MODE_ERROR_CODE 13
-#define COULD_NOT_DECIDES_HOW_NEWLY_ARRIVED_SMS_MESSAGES_SHOULD_BE_HANDLED_ERROR_CODE 14
-#define COULD_NOT_LIST_OF_MESSAGE_STORAGES_ERROR_CODE 15
-#define WASN_T_ABLE_TO_FIND_NUMBER_OF_SMS_ERROR_CODE 16
-#define COULD_NOT_READ_SMS_ERROR_CODE 17
+#include "error_codes.h"
 
 #define CLASS_NAME "ModemServ"
 #include "log.h"
                     
-ModemService::ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*_updateFunction)(), void(*_errorFunction)(uint8_t, uint8_t)) :
+ModemService::ModemService(SIM800C* _sim800c, SensorsService* _sensorsService, void(*_updateFunction)(), void(*_errorFunction)(uint8_t)) :
     sim800c(_sim800c),
     sensorsService(_sensorsService),
     updateFunction(_updateFunction),
@@ -66,7 +48,7 @@ void ModemService::startModemIfNeed() {
         sim800cResult = sim800c->sendCmd("AT", "OK", 1000, 3);
         if (sim800cResult->status != SIM800C_SUCCESS) {
             logError("Modem cannot accept AT command\r\n");
-            errorFunction(SERVICE_ID, MODEM_COULD_NOT_ACCEPT_AT_COMMAND_ERROR_CODE);
+            errorFunction(MODEM_COULD_NOT_ACCEPT_AT_COMMAND_ERROR_CODE);
         }
         logInfo("Modem accepted AT command!\r\n");
     }
@@ -76,49 +58,49 @@ void ModemService::checkModemHealth() {
     sim800cResult = sim800c->sendCmd("AT", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Modem cannot accept AT command\r\n");
-        errorFunction(SERVICE_ID, MODEM_COULD_NOT_ACCEPT_AT_COMMAND_ERROR_CODE);
+        errorFunction(MODEM_COULD_NOT_ACCEPT_AT_COMMAND_ERROR_CODE);
     }
 
     logInfo("Disable modem echo\r\n");
     sim800cResult = sim800c->sendCmd("ATE0");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not disable modem echo\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_DISABLE_MODEM_ECHO_ERROR_CODE);
+        errorFunction(COULD_NOT_DISABLE_MODEM_ECHO_ERROR_CODE);
     }
 
     logInfo("Enable full functionality of the modem\r\n");
     sim800cResult = sim800c->sendCmd("AT+CFUN=1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not enable full functionality of the modem\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_ENABLE_FULL_FUNCTIONALITY_ERROR_CODE);
+        errorFunction(COULD_NOT_ENABLE_FULL_FUNCTIONALITY_ERROR_CODE);
     }
 
     logInfo("Read SIM information to confirm whether the SIM is plugged\r\n");
     sim800cResult = sim800c->sendCmd("AT+CCID", "OK", 1000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not read SIM information\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_READ_SIM_INFORMATION_ERROR_CODE);
+        errorFunction(COULD_NOT_READ_SIM_INFORMATION_ERROR_CODE);
     }
 
     logInfo("Check if the SIM is locked by pin\r\n");
     sim800cResult = sim800c->sendCmd("AT+CPIN?", "+CPIN: READY", 5000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not check if the SIM is locked by pin\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_CHECK_IF_THE_SIM_IS_LOCKED_ERROR_CODE);
+        errorFunction(COULD_NOT_CHECK_IF_THE_SIM_IS_LOCKED_ERROR_CODE);
     }
 
     logInfo("Check whether it has registered in the network\r\n");
     sim800cResult = sim800c->sendCmd("AT+CREG?", "+CREG: 0,1", 10000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not check whether it has registered in the network\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_CHECK_IF_THE_MODEM_IS_REISTERED_ERROR_CODE);
+        errorFunction(COULD_NOT_CHECK_IF_THE_MODEM_IS_REISTERED_ERROR_CODE);
     }
 
     logInfo("Check signal quality\r\n");
     sim800cResult = sim800c->sendCmd("AT+CSQ", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not check signal quality\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_CHECK_THE_SIGNAL_QUALITY_ERROR_CODE);
+        errorFunction(COULD_NOT_CHECK_THE_SIGNAL_QUALITY_ERROR_CODE);
     }
 
     SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(1, "+CSQ: ", ",");
@@ -127,35 +109,35 @@ void ModemService::checkModemHealth() {
         logInfo("Signal quality: %d\r\n", signalQuality);
     } else {
         logError("Wasn't able to find signal quality in the response\r\n");
-        errorFunction(SERVICE_ID, WASN_T_ABLE_TO_FIND_SIGNAL_QUALITY_IN_THE_RESPONSE_ERROR_CODE);
+        errorFunction(WASN_T_ABLE_TO_FIND_SIGNAL_QUALITY_IN_THE_RESPONSE_ERROR_CODE);
     }
 
     logInfo("Check battery level\r\n");
     sim800cResult = sim800c->sendCmd("AT+CBC", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not check battery level\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_CHECK_BATTERY_LEVEL_ERROR_CODE);
+        errorFunction(COULD_NOT_CHECK_BATTERY_LEVEL_ERROR_CODE);
     }
     findResult = sim800c->findInRxBuffer(3, "+CBC: ", ",", ",", "\r\n");
     if (findResult->results[0].found) {
         logInfo("Is Battery charging?: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         logError("Wasn't able to find if battery is chraging or not\r\n");
-        errorFunction(SERVICE_ID, WASN_T_ABLE_TO_FIND_IF_BATTERY_IS_CHRAGING_OR_NOT_ERROR_CODE);
+        errorFunction(WASN_T_ABLE_TO_FIND_IF_BATTERY_IS_CHRAGING_OR_NOT_ERROR_CODE);
     }
     if (findResult->results[1].found) {
         batteryLevel = (uint8_t)findResult->results[1].valueInt;
         logInfo("Battery level: %d\r\n", batteryLevel);
     } else {
         logError("Wasn't able to find battery level\r\n");
-        errorFunction(SERVICE_ID, WASN_T_ABLE_TO_FIND_BATTERY_LEVEL_ERROR_CODE);
+        errorFunction(WASN_T_ABLE_TO_FIND_BATTERY_LEVEL_ERROR_CODE);
     }
     if (findResult->results[2].found) {
         batteryVoltage = (uint16_t)findResult->results[2].valueInt;
         logInfo("Battery voltage: %d\r\n", batteryVoltage);
     } else {
         logError("Wasn't able to find battery voltage\r\n");
-        errorFunction(SERVICE_ID, WASN_T_ABLE_TO_FIND_BATTERY_VOLTAGE_ERROR_CODE);
+        errorFunction(WASN_T_ABLE_TO_FIND_BATTERY_VOLTAGE_ERROR_CODE);
     }
 
 }
@@ -173,14 +155,14 @@ void ModemService::configureModem() {
     sim800cResult = sim800c->sendCmd("AT+CMGF=1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not configure SMS to work in text mode\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_CONFIGURE_SMS_TO_WORK_IN_TEXT_MODE_ERROR_CODE);
+        errorFunction(COULD_NOT_CONFIGURE_SMS_TO_WORK_IN_TEXT_MODE_ERROR_CODE);
     }
 
     logInfo("Decides how newly arrived SMS messages should be handled\r\n");
     sim800cResult = sim800c->sendCmd("AT+CNMI=1,1,0,0,0", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not decides how newly arrived SMS messages should be handled\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_DECIDES_HOW_NEWLY_ARRIVED_SMS_MESSAGES_SHOULD_BE_HANDLED_ERROR_CODE);
+        errorFunction(COULD_NOT_DECIDES_HOW_NEWLY_ARRIVED_SMS_MESSAGES_SHOULD_BE_HANDLED_ERROR_CODE);
     }
 }
 
@@ -189,14 +171,14 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
     sim800cResult = sim800c->sendCmd("AT+CPMS?", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not list of message storages\r\n");
-        errorFunction(SERVICE_ID, COULD_NOT_LIST_OF_MESSAGE_STORAGES_ERROR_CODE);
+        errorFunction(COULD_NOT_LIST_OF_MESSAGE_STORAGES_ERROR_CODE);
     }
     SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(1, "+CPMS: \"SM_P\",", ",");
     if (findResult->results[0].found) {
         logInfo("Number Of SMS: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         logError("Wasn't able to find number of SMSs\r\n");
-        errorFunction(SERVICE_ID, WASN_T_ABLE_TO_FIND_NUMBER_OF_SMS_ERROR_CODE);
+        errorFunction(WASN_T_ABLE_TO_FIND_NUMBER_OF_SMS_ERROR_CODE);
     }
     foundSettingsSMS = false;
     char* settingsSMSMessage;
@@ -207,7 +189,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
         sim800cResult = sim800c->sendCmd(cmd, "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
             logError("Could not read SMS #%d\r\n", i);
-            errorFunction(SERVICE_ID, COULD_NOT_READ_SMS_ERROR_CODE);
+            errorFunction(COULD_NOT_READ_SMS_ERROR_CODE);
         }
 
         SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(5, "+CMGR: \"", "\",\"", "\",\"", "\",\"", "\"\r\n", "\r\n\r\nOK");
@@ -216,14 +198,14 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
             logInfo("Phone number: %s\r\n", phoneNumber);
         } else {
             logError("Wasn't able to find SMS #%d phone number\r\n", i);
-            errorFunction(SERVICE_ID, 18);
+            errorFunction(WASN_T_ABLE_TO_FIND_SMS_PHONE_NUMBER);
         }
 
         if (findResult->results[4].found) {
             logInfo("SMS message: %.*s\r\n", findResult->results[4].length, findResult->results[4].value);
         } else {
             logError("Wasn't able to find SMS #%d message\r\n", i);
-            errorFunction(SERVICE_ID, 19);
+            errorFunction(WASN_T_ABLE_TO_FIND_SMS_MESSAGE);
         }
 
         const char* smsTitle = "Bees Scale Settings";
@@ -293,7 +275,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
             sim800cResult = sim800c->sendCmd(cmd, "OK", 5000);
             if (sim800cResult->status != SIM800C_SUCCESS) {
                 logError("Wasn't able to delete SMS with index: %d\r\n", i);
-                errorFunction(SERVICE_ID, 20);
+                errorFunction(WASN_T_ABLE_TO_DELETE_SMS_WITH_INDEX);
             }
         }
     }
@@ -303,7 +285,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
         sim800cResult = sim800c->sendCmd("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
             logError("Wasn't able to set the GPRS connection parameter\r\n");
-            errorFunction(SERVICE_ID, 21);
+            errorFunction(WASN_T_ABLE_TO_SET_THE_GPRS_CONNECTION_PARAMETER);
         }
 
         logInfo("Configure APN\r\n");
@@ -313,7 +295,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
         sim800cResult = sim800c->sendCmd(apnCmd, "OK");
         if (sim800cResult->status != SIM800C_SUCCESS) {
             logError("Wasn't able to set the APN parameter\r\n");
-            errorFunction(SERVICE_ID, 22);
+            errorFunction(WASN_T_ABLE_TO_SET_THE_APN_PARAMETER);
         }
 
         if (user[0] != '\0') {
@@ -324,7 +306,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
             sim800cResult = sim800c->sendCmd(userCmd, "OK");
             if (sim800cResult->status != SIM800C_SUCCESS) {
                 logError("Wasn't able to set the USER parameter\r\n");
-                errorFunction(SERVICE_ID, 22);
+                errorFunction(WASN_T_ABLE_TO_SET_THE_USER_PARAMETER);
             }
         }
 
@@ -336,7 +318,7 @@ void ModemService::findSMSWithSettingsAndConfigureModem() {
             sim800cResult = sim800c->sendCmd(pwdCmd, "OK");
             if (sim800cResult->status != SIM800C_SUCCESS) {
                 logError("Wasn't able to set the PWD parameter\r\n");
-                errorFunction(SERVICE_ID, 23);
+                errorFunction(WASN_T_ABLE_TO_SET_THE_PWD_PARAMETER);
             }
         }
         foundSettingsSMS = true;
@@ -349,7 +331,8 @@ void ModemService::deleteAllSMS() {
     logInfo("Delete All SMS\r\n");
     sim800cResult = sim800c->sendCmd("AT+CMGD=1,4", "OK", 25000);
     if (sim800cResult->status != SIM800C_SUCCESS) {
-        errorFunction(SERVICE_ID, 24);
+        logError("Could not delete all SMS\r\n");
+        errorFunction(COULD_NOT_DELETE_ALL_SMS);
     }
 }
 
@@ -379,14 +362,14 @@ void ModemService::openBearer() {
     sim800cResult = sim800c->sendCmd("AT+SAPBR=2,1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not query bearer\r\n");
-        errorFunction(SERVICE_ID, 25);
+        errorFunction(COULD_NOT_QUERY_BEARER);
     }
 
     logInfo("Open bearer\r\n");
     sim800cResult = sim800c->sendCmd("AT+SAPBR=1,1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not open bearer\r\n");
-        errorFunction(SERVICE_ID, 26);
+        errorFunction(COULD_NOT_OPEN_BEARER);
     }
 }
 
@@ -399,28 +382,28 @@ void ModemService::configureDateAndTime() {
     sim800cResult = sim800c->sendCmd("AT+CNTPCID=1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not set NTP use bear profile 1\r\n");
-        errorFunction(SERVICE_ID, 27);
+        errorFunction(COULD_NOT_SET_NTP_USE_BEAR_PROFILE_1);
     }
 
     logInfo("Set NTP service url and local time zone\r\n");
     sim800cResult = sim800c->sendCmd("AT+CNTP=\"time1.google.com\",0", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
-        logError("Could not set NTP use bear profile 1\r\n");
-        errorFunction(SERVICE_ID, 27);
+        logError("Could not set NTP service url and local time zone\r\n");
+        errorFunction(COULD_NOT_SET_NTP_SERVICE_URL_AND_LOCAL_TIME_ZONE);
     }
 
     logInfo("Start sync network time\r\n");
     sim800cResult = sim800c->sendCmd("AT+CNTP", "+CNTP: 1", 10000, 2);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Network time syncronisation is unsuccessful\r\n");
-        errorFunction(SERVICE_ID, 28);
+        errorFunction(NETWORK_TIME_SYNCRONISATION_IS_UNSUCCESSFUL);
     }
 
     logInfo("Network time syncronisation is successful\r\n");
     sim800cResult = sim800c->sendCmd("AT+CCLK?", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
-        logError("Could not receive clock\r\n");
-        errorFunction(SERVICE_ID, 29);
+        logError("Could not sync the clock\r\n");
+        errorFunction(COULD_NOT_SYNC_THE_CLOCK);
     }
 
     SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(7, "+CCLK: \"", "/", "/", ",", ":", ":", "+", "\"");
@@ -428,37 +411,37 @@ void ModemService::configureDateAndTime() {
         logInfo("Found Date: %d\r\n", (uint8_t)findResult->results[0].valueInt);
     } else {
         logError("Wasn't able to find the date\r\n");
-        errorFunction(SERVICE_ID, 30);
+        errorFunction(WASN_T_ABLE_TO_FIND_THE_DATE);
     }
     if (findResult->results[1].found) {
         logInfo("Found Month: %d\r\n", (uint8_t)findResult->results[1].valueInt);
     } else {
         logError("Wasn't able to find the month\r\n");
-        errorFunction(SERVICE_ID, 31);
+        errorFunction(WASN_T_ABLE_TO_FIND_THE_MONTH);
     }
     if (findResult->results[2].found) {
         logInfo("Found Year: %d\r\n", (uint8_t)findResult->results[2].valueInt);
     } else {
         logError("Wasn't able to find year\r\n");
-        errorFunction(SERVICE_ID, 32);
+        errorFunction(WASN_T_ABLE_TO_FIND_YEAR);
     }
     if (findResult->results[3].found) {
         logInfo("Found Hours: %d\r\n", (uint8_t)findResult->results[3].valueInt);
     } else {
         logError("Wasn't able to find hours\r\n");
-        errorFunction(SERVICE_ID, 33);
+        errorFunction(WASN_T_ABLE_TO_FIND_HOURS);
     }
     if (findResult->results[4].found) {
         logInfo("Found Minutes: %d\r\n", (uint8_t)findResult->results[4].valueInt);
     } else {
         logError("Wasn't able to find minutes\r\n");
-        errorFunction(SERVICE_ID, 34);
+        errorFunction(WASN_T_ABLE_TO_FIND_MINUTES);
     }
     if (findResult->results[5].found) {
         logInfo("Found Seconds: %d\r\n", (uint8_t)findResult->results[5].valueInt);
     } else {
         logError("Wasn't able to find seconds\r\n");
-        errorFunction(SERVICE_ID, 35);
+        errorFunction(WASN_T_ABLE_TO_FIND_SECONDS);
     }
 
     HAL_RTC_SetLocalDate((uint8_t)findResult->results[1].valueInt, (uint8_t)findResult->results[0].valueInt, (uint8_t)findResult->results[2].valueInt);
@@ -468,7 +451,7 @@ void ModemService::configureDateAndTime() {
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not stop bearer\r\n");
-        errorFunction(SERVICE_ID, 36);
+        errorFunction(COULD_NOT_STOP_BEARER);
     }
 }
 
@@ -501,14 +484,14 @@ void ModemService::sendData(uint8_t sensorData[][32]) {
     sim800cResult = sim800c->sendCmd("AT+HTTPINIT", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not initialize HTTP service\r\n");
-        errorFunction(SERVICE_ID, 37);
+        errorFunction(COULD_NOT_INITIALIZE_HTTP_SERVICE);
     }
 
     logInfo("Set HTTP parameters value: CID\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPPARA=\"CID\",1", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not set HTTP parameters value: CID\r\n");
-        errorFunction(SERVICE_ID, 38);
+        errorFunction(COULD_NOT_SET_HTTP_PARAMETERS_VALUE_CID);
     }
 
     logInfo("Set HTTP parameters value: URL\r\n");
@@ -517,14 +500,14 @@ void ModemService::sendData(uint8_t sensorData[][32]) {
     sim800cResult = sim800c->sendCmd(buff, "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not set HTTP parameters value: URL\r\n");
-        errorFunction(SERVICE_ID, 39);
+        errorFunction(COULD_NOT_SET_HTTP_PARAMETERS_VALUE_URL);
     }
 
     logInfo("Set HTTP parameters value: CONTENT\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPPARA=\"CONTENT\",\"application/json\"", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not set HTTP parameters value: CONTENT\r\n");
-        errorFunction(SERVICE_ID, 40);
+        errorFunction(COULD_NOT_SET_HTTP_PARAMETERS_VALUE_CONTENT);
     }
 
     char data[500] = {0};
@@ -572,19 +555,19 @@ void ModemService::sendData(uint8_t sensorData[][32]) {
     sim800cResult = sim800c->sendCmd(buff, "DOWNLOAD");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not receive DOWNLOAD\r\n");
-        errorFunction(SERVICE_ID, 41);
+        errorFunction(COULD_NOT_RECEIVE_DOWNLOAD);
     }
     logInfo("Data: %s\r\n", data);
     sim800cResult = sim800c->sendCmd(data);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Error send data\r\n");
-        errorFunction(SERVICE_ID, 42);
+        errorFunction(ERROR_SEND_DATA);
     }
     logInfo("HTTP method action\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPACTION=1", "+HTTPACTION: ", 10000, 0);
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not HTTP method action\r\n");
-        errorFunction(SERVICE_ID, 43);
+        errorFunction(COULD_NOT_HTTP_METHOD_ACTION);
     }
 
     SIM800CFindInRxBufferResult* findResult = sim800c->findInRxBuffer(3, "+HTTPACTION: ", ",", ",", "\n");
@@ -592,27 +575,27 @@ void ModemService::sendData(uint8_t sensorData[][32]) {
         logInfo("Response code: %d\r\n", (uint8_t)findResult->results[1].valueInt);
     } else {
         logError("Wasn't able to find response code\r\n");
-        errorFunction(SERVICE_ID, 44);
+        errorFunction(WASN_T_ABLE_TO_FIND_RESPONSE_CODE);
     }
     // TODO implement retry
     logInfo("Read the HTTP server response\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPREAD", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not read the HTTP server response\r\n");
-        errorFunction(SERVICE_ID, 45);
+        errorFunction(COULD_NOT_READ_THE_HTTP_SERVER_RESPONSE);
     }
 
     logInfo("Terminate HTTP service\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPTERM", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not terminate HTTP service\r\n");
-        errorFunction(SERVICE_ID, 46);
+        errorFunction(COULD_NOT_TERMINATE_HTTP_SERVICE);
     }
     logInfo("Close bearer\r\n");
     sim800cResult = sim800c->sendCmd("AT+SAPBR=0,1", "OK");
      if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not close bearer\r\n");
-        errorFunction(SERVICE_ID, 47);
+        errorFunction(COULD_NOT_CLOSE_BEARER);
     }
 }
 
@@ -621,7 +604,7 @@ void ModemService::powerDown() {
     sim800cResult = sim800c->sendCmd("AT+CPOWD=1", "NORMAL POWER DOWN");
     if (sim800cResult->status != SIM800C_SUCCESS) {
         logError("Could not power down the modem\r\n");
-        errorFunction(SERVICE_ID, 48);
+        errorFunction(COULD_NOT_POWER_DOWN_THE_MODEM);
     }
 }
 
