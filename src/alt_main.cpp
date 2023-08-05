@@ -22,18 +22,20 @@
 #define CLASS_NAME "alt_main."
 #include "log.h"
 
-#define NRF_MASTER_ADDRESS (uint32_t)0x32AB12E7
-#define NRF_SLAVE_ADDRESS_1 (uint32_t)0x32AB12E8
-#define NRF_SLAVE_ADDRESS_2 (uint32_t)0x32AB12E9
-#define NRF_SLAVE_ADDRESS_3 (uint32_t)0x32AB12EA
-#define NRF_SLAVE_ADDRESS_4 (uint32_t)0x32AB12EB
-#define NRF_SLAVE_ADDRESS_5 (uint32_t)0x32AB12EC
-#define NRF_SLAVE_ADDRESS_6 (uint32_t)0x32AB12ED
-#define NRF_SLAVE_ADDRESS_7 (uint32_t)0x32AB12EE
-#define NRF_SLAVE_ADDRESS_8 (uint32_t)0x32AB12EF
-#define NRF_SLAVE_ADDRESS_9 (uint32_t)0x32AB12F1
-#define NRF_SLAVE_ADDRESS_10 (uint32_t)0632AB12F2
+#define NRF_SLAVE_ADDRESS_1  (uint32_t)0x32AB12E8
+#define NRF_SLAVE_ADDRESS_2  (uint32_t)0x32AB12E9
+#define NRF_SLAVE_ADDRESS_3  (uint32_t)0x32AB12EA
+#define NRF_SLAVE_ADDRESS_4  (uint32_t)0x32AB12EB
+#define NRF_SLAVE_ADDRESS_5  (uint32_t)0x32AB12EC
+#define NRF_SLAVE_ADDRESS_6  (uint32_t)0x32AB12ED
+#define NRF_SLAVE_ADDRESS_7  (uint32_t)0x32AB12EE
+#define NRF_SLAVE_ADDRESS_8  (uint32_t)0x32AB12EF
+#define NRF_SLAVE_ADDRESS_9  (uint32_t)0x32AB12F1
+#define NRF_SLAVE_ADDRESS_10 (uint32_t)0x32AB12F2
 
+
+#define NRF_MASTER_ADDRESS   (uint32_t)0x32AB12E7
+#define NRF_SLAVE_ADDRESS    NRF_SLAVE_ADDRESS_1
 
 void update();
 
@@ -60,6 +62,8 @@ uint8_t data[32] = {0};
 uint8_t masterData[3][32] = {0};
 uint8_t sensorData[3][32] = {0};
 
+uint32_t slaveAdresses[10] = {NRF_SLAVE_ADDRESS_1, NRF_SLAVE_ADDRESS_2, NRF_SLAVE_ADDRESS_3, NRF_SLAVE_ADDRESS_4, NRF_SLAVE_ADDRESS_5, NRF_SLAVE_ADDRESS_6, NRF_SLAVE_ADDRESS_7, NRF_SLAVE_ADDRESS_8, NRF_SLAVE_ADDRESS_9, NRF_SLAVE_ADDRESS_10};
+
 bool deviceIsMaster = false;
 bool deviceWasWakedUpFromStandby = false;
 bool deviceWasWakedUpFromPower = false;
@@ -76,12 +80,12 @@ bool wakedUpFromPower();
 bool wakedUpFromPinReset();
 bool wakedUpFromSoftware();
 void readSensorAndPopulateSensorData(uint8_t i);
-void sendData(uint8_t i);
 uint8_t getSlaveBatteryLevel();
-void printData(uint8_t *dataToPrint);
 
-void initNrfOnPowerOn();
+void initRadioOnPowerOn();
 float getCpuTemperature();
+
+void askSlaveAndSendData(uint8_t slaveIndex);
 
 int alt_main()
 {
@@ -139,7 +143,6 @@ int alt_main()
                 modemService.startModemIfNeed();
                 modemService.checkModemHealth();
                 modemService.disablePowerOnPin();
-
                 modemService.configureModem();
                 modemService.findSMSWithSettingsAndConfigureModem();
 
@@ -150,54 +153,22 @@ int alt_main()
                 modemService.sendData(sensorData);
 
                 logInfo("Master data was sent successful\r\n");
-
-                logInfo("Ask Slave 1, Sensor one details.\r\n");
-                logInfo("Init NRF\r\n");
-                nRF24L01p.init();
-                nRF24L01p.enablePayloadWithAknoladge();
-                nRF24L01p.enableDynamicPayload(0);
-                nRF24L01p.enableDynamicPayload(1);
-                nRF24L01p.stopListening();
-                nRF24L01p.openWritingPipe(NRF_SLAVE_ADDRESS_1);
-
-                timeService.populateDataWithDateAndTime(data);
-                timeService.populateDataWithAlarmTimeFor(data, 30, SECONDS);
-                logInfo("Send ");
-                printData(data);
-
-                for (uint8_t i = 0; i < 3; i++)
+                
+                radioService.initRadio();
+                radioService.stopListening();
+                for (uint8_t i = 0; i < 10; i++)
                 {
-                    bool successSendCmd = nRF24L01p.write(data);
-                    if (successSendCmd)
-                    {
-                        if (nRF24L01p.isDataAvailable())
-                        {
-                            nRF24L01p.receive(sensorData[i]);
-                            logInfo("Received ");
-                            printData(sensorData[i]);
-                            nonBlockingDelay(40); // To allow slave to receive data and print it
-                        }
-                        else
-                        {
-                            logInfo("No Data\r\n");
-                        }
-                    }
-                    else
-                    {
-                        logInfo("Send CMD failed: 0x%02X\r\n", data[0]);
-                    }
+                    askSlaveAndSendData(i);
                 }
-
-                nRF24L01p.powerDown();
-                modemService.sendData(sensorData);
                 logInfo("Slave data was sent successful\r\n");
+                radioService.powerDown();
                 modemService.powerDown();
-                timeService.setAlarmFor(30, SECONDS);
+                timeService.setAlarmFor(modemService.getRefreshIntervalInMinutes(), MINUTES);
                 goToStandByMode();
             }
             else
             {
-                initNrfOnPowerOn();
+                initRadioOnPowerOn();
             }
         }
     }
@@ -244,7 +215,7 @@ int alt_main()
         }
         else
         {
-            initNrfOnPowerOn();
+            initRadioOnPowerOn();
         }
     }
 
@@ -254,30 +225,57 @@ int alt_main()
     }
 }
 
-void initNrfOnPowerOn()
+void askSlaveAndSendData(uint8_t slaveIndex) {
+    logInfo("Request Slave %lu for details\r\n", slaveAdresses[slaveIndex]);
+
+    radioService.openWritingPipe(slaveAdresses[slaveIndex]);
+    timeService.populateDataWithDateAndTime(data);
+    timeService.populateDataWithAlarmTimeFor(data, modemService.getRefreshIntervalInMinutes(), MINUTES);
+    bool slaveSentData = false;
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        bool successSendCmd = radioService.write(data);
+        if (successSendCmd)
+        {
+            if (radioService.isDataAvailable())
+            {
+                radioService.receive(sensorData[i]);
+                nonBlockingDelay(40); // To allow slave to receive data and print it
+                slaveSentData = true;
+            }
+            else
+            {
+                logInfo("No Data\r\n");
+            }
+        }
+        else
+        {
+            logInfo("Send to Slave %lu failed\r\n", slaveAdresses[slaveIndex]);
+            break;
+        }
+    }
+    if (slaveSentData) {
+        modemService.sendData(sensorData);
+    } else {
+        logInfo("Send data to modem is skiped because Slave: %lu didn't respond\r\n", slaveAdresses[slaveIndex]);
+    }
+    
+}
+
+void initRadioOnPowerOn()
 {
     logInfo("We are slave, read sensors, enable radio, set ack packages and go to sleep to wait commands!\r\n");
     readSensorAndPopulateSensorData(0);
     readSensorAndPopulateSensorData(1);
     readSensorAndPopulateSensorData(2);
 
-    printf("Init NRF\r\n");
-    nRF24L01p.init();
-    nRF24L01p.enablePayloadWithAknoladge();
-    nRF24L01p.enableDynamicPayload(0);
-    nRF24L01p.enableDynamicPayload(1);
-    nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS_1, RX_PIPE_1);
-    nRF24L01p.printAllRegisters();
-
-    nRF24L01p.flushTx();
-    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[0], 32));
-    printData(sensorData[0]);
-    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[1], 32));
-    printData(sensorData[1]);
-    logInfo("TX is full: [%d], ", nRF24L01p.writeAcknowledgePayload(RX_PIPE_1, sensorData[2], 32));
-    printData(sensorData[2]);
-
-    nRF24L01p.startListening();
+    radioService.initRadio();
+    radioService.openReadingPipe(NRF_SLAVE_ADDRESS, RX_PIPE_1);
+    radioService.flushTx();
+    radioService.writeAcknowledgePayload(RX_PIPE_1, sensorData[0], 32);
+    radioService.writeAcknowledgePayload(RX_PIPE_1, sensorData[1], 32);
+    radioService.writeAcknowledgePayload(RX_PIPE_1, sensorData[2], 32);
+    radioService.startListening();
     goToStandByMode();
 }
 
@@ -375,25 +373,6 @@ void readSensorAndPopulateSensorData(uint8_t i)
             sensorData[i][j] = 0;
         }
     }
-}
-
-void sendData(uint8_t i)
-{
-    nRF24L01p.stopListening();
-    nRF24L01p.openWritingPipe(NRF_MASTER_ADDRESS);
-    nRF24L01p.write(sensorData[i]);
-    nRF24L01p.openReadingPipe(NRF_SLAVE_ADDRESS_1, 1);
-    nRF24L01p.startListening();
-}
-
-void printData(uint8_t *dataToPrint)
-{
-    printf("Data: 0x");
-    for (uint8_t i = 0; i < 32; i++)
-    {
-        printf("%02X", dataToPrint[i]);
-    }
-    printf("\r\n");
 }
 
 void nonBlockingDelay(uint32_t delayInTicks)

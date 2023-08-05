@@ -160,7 +160,7 @@ void NRF24L01p::sendCommand(uint8_t command)
 /* ========================================== Public Methods ===================================================*/
 
 // Write multiple data
-bool NRF24L01p::writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size)
+void NRF24L01p::writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size)
 {
     uint8_t buf[1];
     buf[0] = W_ACK_PAYLOAD | (pipeNumber & 0x07);
@@ -169,8 +169,6 @@ bool NRF24L01p::writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8
     SPI_Transmit(hspi, buf, 1);
     SPI_Transmit(hspi, data, size);
     setCsnHigh();
-    uint8_t status = readRegister(STATUS);
-    return _CHECK_BIT(status, STATUS_TX_FULL_0);
 }
 
 void NRF24L01p::flushRx()
@@ -289,7 +287,7 @@ bool NRF24L01p::write(uint8_t *data)
             return true;
         }
 
-        if (_CHECK_BIT(status, STATUS_MAX_RT_4) || (timer + 1000) < HAL_GetTick())
+        if (_CHECK_BIT(status, STATUS_MAX_RT_4) || (timer + 100) < HAL_GetTick())
         {
             flushTx();
             clearMaxRtStatus();

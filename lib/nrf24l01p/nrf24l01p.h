@@ -144,7 +144,7 @@ public:
     void disablePipe(uint8_t pipeNumber);
     void enableDynamicPayload(uint8_t pipeNumber);
     void enablePayloadWithAknoladge();
-    bool writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size);
+    void writeAcknowledgePayload(uint8_t pipeNumber, uint8_t *data, uint8_t size);
 };
 
 #endif // __NRF24L01p_H__

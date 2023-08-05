@@ -479,7 +479,6 @@ void ModemService::sendData(uint8_t sensorData[][32]) {
 
     openBearer();
 
-
     logInfo("Initialize HTTP service\r\n");
     sim800cResult = sim800c->sendCmd("AT+HTTPINIT", "OK");
     if (sim800cResult->status != SIM800C_SUCCESS) {
